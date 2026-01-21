@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qgan-latent-representations"
+version = "0.1.0"
+description = "Minimal JAX + PennyLane QGAN with latent compression methods."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "flax",
+  "hydra",
+  "jax",
+  "numpy",
+  "optax",
+  "pennylane",
+  "tqdm",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

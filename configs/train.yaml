@@ -1,0 +1,40 @@
+defaults:
+  - model/autoencoder@model.autoencoder
+  - model/quantum_generator@model.quantum_generator
+  - model/discriminator@model.discriminator
+  - data/mnist
+  - _self_
+
+seed: 42
+batch_size: 128
+train_steps: 2000
+n_critic: 5
+gen_lr: 1e-4
+disc_lr: 1e-4
+ae_lr: 1e-4
+lambda_gp: 10.0
+sample_every: 200
+log_every: 50
+finetune_ae: false
+smoke_test: false
+device: cpu
+wandb_mode: disabled
+
+outputs:
+  dir: outputs/train
+
+checkpoints:
+  dir: checkpoints
+  generator: qgan_gen.ckpt
+  discriminator: qgan_disc.ckpt
+  autoencoder: autoencoder.ckpt
+
+wandb:
+  project: qgan-latent
+  entity: null
+  tags: []
+  name: null
+
+hydra:
+  run:
+    dir: ${outputs.dir}

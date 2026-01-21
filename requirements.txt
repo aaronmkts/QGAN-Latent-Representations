@@ -1,0 +1,9 @@
+torch 
+pennylane
+numpy
+jax
+optax
+hydra
+hydra
+flax
+tqdm

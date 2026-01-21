@@ -1,0 +1,32 @@
+defaults:
+  - model/autoencoder@model.autoencoder
+  - data/mnist
+  - _self_
+
+seed: 42
+batch_size: 128
+pretrain_epochs: 10
+learning_rate: 1e-3
+loss: mse
+log_every: 100
+sample_every: 500
+smoke_test: false
+device: cpu
+wandb_mode: disabled
+
+outputs:
+  dir: outputs/pretrain
+
+checkpoints:
+  dir: checkpoints
+  autoencoder: autoencoder.ckpt
+
+wandb:
+  project: qgan-latent
+  entity: null
+  tags: []
+  name: null
+
+hydra:
+  run:
+    dir: ${outputs.dir}

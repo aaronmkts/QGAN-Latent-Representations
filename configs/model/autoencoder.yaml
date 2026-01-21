@@ -1,0 +1,5 @@
+latent_dim: 8
+encoder_channels: [32, 64]
+decoder_channels: [64, 32]
+mlp_dim: 128
+tanh_latent: true
