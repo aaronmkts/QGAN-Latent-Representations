@@ -5,7 +5,7 @@ from .compression_methods.autoencoder import Autoencoder, init_autoencoder_param
 from .quantum_generator import (
     build_generator_apply,
     init_generator_params,
-    make_circuit,
+    make_style_based_circuit,
     sample_noise,
 )
 
@@ -16,6 +16,6 @@ __all__ = [
     "init_autoencoder_params",
     "init_discriminator_params",
     "init_generator_params",
-    "make_circuit",
+    "make_style_based_circuit",
     "sample_noise",
 ]

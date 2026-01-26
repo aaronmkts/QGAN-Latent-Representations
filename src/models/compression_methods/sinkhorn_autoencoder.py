@@ -4,12 +4,12 @@ import math
 from typing import Sequence
 
 from flax import struct
-from flax.training import train_state
 import jax
 import jax.numpy as jnp
 import optax
 
-from .autoencoder import Autoencoder, init_autoencoder_params_with_shape
+from .autoencoder import Autoencoder, init_autoencoder_variables_with_shape
+from utils.train_state import TrainStateWithBatchStats
 
 
 @struct.dataclass
@@ -31,6 +31,7 @@ class SinkhornAutoencoderConfig:
 @struct.dataclass
 class SinkhornAutoencoderState:
     params: dict
+    batch_stats: dict
     config: SinkhornAutoencoderConfig
 
 
@@ -68,18 +69,26 @@ def _sinkhorn_distance(
 def make_train_step(model: Autoencoder, config: SinkhornAutoencoderConfig):
     @jax.jit
     def train_step(
-        state: train_state.TrainState, batch: jnp.ndarray, rng: jax.random.KeyArray
+        state: TrainStateWithBatchStats, batch: jnp.ndarray, rng: jax.random.KeyArray
     ):
         def loss_fn(params):
-            z = model.apply({"params": params}, batch, method=Autoencoder.encode)
-            recon = model.apply({"params": params}, z, method=Autoencoder.decode)
+            variables = {"params": params, "batch_stats": state.batch_stats}
+            z, enc_updates = model.apply(
+                variables, batch, method=Autoencoder.encode, train=True, mutable=["batch_stats"]
+            )
+            variables = {"params": params, "batch_stats": enc_updates["batch_stats"]}
+            recon, dec_updates = model.apply(
+                variables, z, method=Autoencoder.decode, train=True, mutable=["batch_stats"]
+            )
             recon_loss = _recon_loss(batch, recon, config.loss)
             target = jax.random.normal(rng, z.shape)
             sinkhorn = _sinkhorn_distance(z, target, config.sinkhorn_eps, config.sinkhorn_iters)
-            return recon_loss + config.sinkhorn_weight * sinkhorn
+            return recon_loss + config.sinkhorn_weight * sinkhorn, dec_updates["batch_stats"]
 
-        loss, grads = jax.value_and_grad(loss_fn)(state.params)
-        new_state = state.apply_gradients(grads=grads)
+        (loss, new_batch_stats), grads = jax.value_and_grad(loss_fn, has_aux=True)(
+            state.params
+        )
+        new_state = state.apply_gradients(grads=grads).replace(batch_stats=new_batch_stats)
         return new_state, loss
 
     return train_step
@@ -97,10 +106,13 @@ def fit(
         tanh_latent=config.tanh_latent,
     )
     rng, init_rng = jax.random.split(rng)
-    params = init_autoencoder_params_with_shape(init_rng, model, input_shape=data.shape[1:])
-    state = train_state.TrainState.create(
+    variables = init_autoencoder_variables_with_shape(
+        init_rng, model, input_shape=data.shape[1:]
+    )
+    state = TrainStateWithBatchStats.create(
         apply_fn=model.apply,
-        params=params,
+        params=variables["params"],
+        batch_stats=variables["batch_stats"],
         tx=optax.adam(config.learning_rate),
     )
     train_step = make_train_step(model, config)
@@ -116,7 +128,9 @@ def fit(
             rng, step_rng = jax.random.split(rng)
             state, _ = train_step(state, batch, step_rng)
 
-    return SinkhornAutoencoderState(params=state.params, config=config)
+    return SinkhornAutoencoderState(
+        params=state.params, batch_stats=state.batch_stats, config=config
+    )
 
 
 def transform(data: jnp.ndarray, state: SinkhornAutoencoderState) -> jnp.ndarray:
@@ -128,7 +142,8 @@ def transform(data: jnp.ndarray, state: SinkhornAutoencoderState) -> jnp.ndarray
         mlp_dim=state.config.mlp_dim,
         tanh_latent=state.config.tanh_latent,
     )
-    return model.apply({"params": state.params}, data, method=Autoencoder.encode)
+    variables = {"params": state.params, "batch_stats": state.batch_stats}
+    return model.apply(variables, data, method=Autoencoder.encode, train=False)
 
 
 def fit_transform(

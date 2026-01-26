@@ -8,6 +8,7 @@ from .autoencoder import (
     fit_transform as fit_transform_autoencoder,
     init_autoencoder_params,
     init_autoencoder_params_with_shape,
+    init_autoencoder_variables_with_shape,
     transform as transform_autoencoder,
 )
 from .nmf import NMFConfig, NMFState, fit as fit_nmf, fit_transform as fit_transform_nmf, transform as transform_nmf
@@ -64,6 +65,7 @@ __all__ = [
     "fit_variational_autoencoder",
     "init_autoencoder_params",
     "init_autoencoder_params_with_shape",
+    "init_autoencoder_variables_with_shape",
     "transform_autoencoder",
     "transform_nmf",
     "transform_pca",

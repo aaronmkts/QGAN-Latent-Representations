@@ -5,13 +5,13 @@ from typing import Sequence
 
 import flax.linen as nn
 from flax import struct
-from flax.training import train_state
 import jax
 import jax.numpy as jnp
 import optax
 
-from .autoencoder import Autoencoder, init_autoencoder_params_with_shape
+from .autoencoder import Autoencoder, init_autoencoder_variables_with_shape
 from .sinkhorn_autoencoder import _sinkhorn_distance
+from utils.train_state import TrainStateWithBatchStats
 
 
 class LatentClassifier(nn.Module):
@@ -46,6 +46,7 @@ class SinkclassAutoencoderConfig:
 @struct.dataclass
 class SinkclassAutoencoderState:
     params: dict
+    batch_stats: dict
     config: SinkclassAutoencoderConfig
 
 
@@ -72,7 +73,7 @@ def make_train_step(
 ):
     @jax.jit
     def train_step(
-        state: train_state.TrainState,
+        state: TrainStateWithBatchStats,
         batch: jnp.ndarray,
         labels: jnp.ndarray,
         rng: jax.random.KeyArray,
@@ -80,8 +81,14 @@ def make_train_step(
         def loss_fn(params):
             ae_params = params["autoencoder"]
             cls_params = params["classifier"]
-            z = autoencoder.apply({"params": ae_params}, batch, method=Autoencoder.encode)
-            recon = autoencoder.apply({"params": ae_params}, z, method=Autoencoder.decode)
+            variables = {"params": ae_params, "batch_stats": state.batch_stats}
+            z, enc_updates = autoencoder.apply(
+                variables, batch, method=Autoencoder.encode, train=True, mutable=["batch_stats"]
+            )
+            variables = {"params": ae_params, "batch_stats": enc_updates["batch_stats"]}
+            recon, dec_updates = autoencoder.apply(
+                variables, z, method=Autoencoder.decode, train=True, mutable=["batch_stats"]
+            )
             recon_loss = _recon_loss(batch, recon, config.loss)
             target = jax.random.normal(rng, z.shape)
             sinkhorn = _sinkhorn_distance(z, target, config.sinkhorn_eps, config.sinkhorn_iters)
@@ -89,10 +96,12 @@ def make_train_step(
             labels = labels.astype(jnp.float32)
             cls_loss = jnp.mean(optax.sigmoid_binary_cross_entropy(logits, labels))
             total = recon_loss + config.sinkhorn_weight * sinkhorn + config.class_weight * cls_loss
-            return total
+            return total, dec_updates["batch_stats"]
 
-        loss, grads = jax.value_and_grad(loss_fn)(state.params)
-        new_state = state.apply_gradients(grads=grads)
+        (loss, new_batch_stats), grads = jax.value_and_grad(loss_fn, has_aux=True)(
+            state.params
+        )
+        new_state = state.apply_gradients(grads=grads).replace(batch_stats=new_batch_stats)
         return new_state, loss
 
     return train_step
@@ -118,12 +127,15 @@ def fit(
     )
     classifier = LatentClassifier(hidden_dim=config.classifier_dim)
     rng, ae_rng, cls_rng = jax.random.split(rng, 3)
-    ae_params = init_autoencoder_params_with_shape(ae_rng, autoencoder, features.shape[1:])
+    ae_variables = init_autoencoder_variables_with_shape(
+        ae_rng, autoencoder, features.shape[1:]
+    )
     cls_params = classifier.init(cls_rng, jnp.zeros((1, config.latent_dim)))["params"]
-    params = {"autoencoder": ae_params, "classifier": cls_params}
-    state = train_state.TrainState.create(
+    params = {"autoencoder": ae_variables["params"], "classifier": cls_params}
+    state = TrainStateWithBatchStats.create(
         apply_fn=lambda p, x: p,
         params=params,
+        batch_stats=ae_variables["batch_stats"],
         tx=optax.adam(config.learning_rate),
     )
     train_step = make_train_step(autoencoder, classifier, config)
@@ -140,7 +152,9 @@ def fit(
             rng, step_rng = jax.random.split(rng)
             state, _ = train_step(state, batch, batch_labels, step_rng)
 
-    return SinkclassAutoencoderState(params=state.params, config=config)
+    return SinkclassAutoencoderState(
+        params=state.params, batch_stats=state.batch_stats, config=config
+    )
 
 
 def transform(data: jnp.ndarray, state: SinkclassAutoencoderState) -> jnp.ndarray:
@@ -152,7 +166,8 @@ def transform(data: jnp.ndarray, state: SinkclassAutoencoderState) -> jnp.ndarra
         mlp_dim=state.config.mlp_dim,
         tanh_latent=state.config.tanh_latent,
     )
-    return model.apply({"params": state.params["autoencoder"]}, data, method=Autoencoder.encode)
+    variables = {"params": state.params["autoencoder"], "batch_stats": state.batch_stats}
+    return model.apply(variables, data, method=Autoencoder.encode, train=False)
 
 
 def fit_transform(

@@ -1,6 +1,4 @@
-n_qubits: 8
+n_qubits: 10
 depth: 4
-noise_dim: 8
-latent_dim: 8
-latent_tanh: true
-architecture: SimpleEntangling
+noise_dim: 10
+latent_dim: 20
