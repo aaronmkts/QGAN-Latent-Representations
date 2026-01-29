@@ -1,0 +1,21 @@
+# Control which metrics are active
+active_metrics:
+  - ndb_jsd
+  - ssim
+  - psnr
+  - cos_sim
+
+# Hyperparameters for specific metrics
+ndb_jsd:
+  number_of_bins: 100
+  significance_level: 0.05
+  whitening: true
+  max_dims: null
+
+ssim:
+  data_range: 1.0
+
+psnr:
+  data_range: 1.0
+
+cos_sim: {} # No params needed currently

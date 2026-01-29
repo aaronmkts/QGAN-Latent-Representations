@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import optax
 
 from .autoencoder import Autoencoder, init_autoencoder_variables_with_shape
-from .sinkhorn_autoencoder import _sinkhorn_distance
+from .sinkhorn_autoencoder import _sample_prior, _sinkhorn_distance
 from utils.train_state import TrainStateWithBatchStats
 
 
@@ -38,8 +38,11 @@ class SinkclassAutoencoderConfig:
     batch_size: int = 128
     loss: str = "mse"
     sinkhorn_weight: float = 1.0
+    lambda_sinkhorn: float | None = None
     sinkhorn_eps: float = 0.1
     sinkhorn_iters: int = 50
+    sinkhorn_cost: str = "l2_sq"
+    prior: str = "gaussian"
     class_weight: float = 1.0
 
 
@@ -90,12 +93,15 @@ def make_train_step(
                 variables, z, method=Autoencoder.decode, train=True, mutable=["batch_stats"]
             )
             recon_loss = _recon_loss(batch, recon, config.loss)
-            target = jax.random.normal(rng, z.shape)
-            sinkhorn = _sinkhorn_distance(z, target, config.sinkhorn_eps, config.sinkhorn_iters)
+            target = _sample_prior(rng, z.shape, config.prior)
+            sinkhorn = _sinkhorn_distance(
+                z, target, config.sinkhorn_eps, config.sinkhorn_iters, config.sinkhorn_cost
+            )
             logits = classifier.apply({"params": cls_params}, z)
             labels = labels.astype(jnp.float32)
             cls_loss = jnp.mean(optax.sigmoid_binary_cross_entropy(logits, labels))
-            total = recon_loss + config.sinkhorn_weight * sinkhorn + config.class_weight * cls_loss
+            weight = config.sinkhorn_weight if config.lambda_sinkhorn is None else config.lambda_sinkhorn
+            total = recon_loss + weight * sinkhorn + config.class_weight * cls_loss
             return total, dec_updates["batch_stats"]
 
         (loss, new_batch_stats), grads = jax.value_and_grad(loss_fn, has_aux=True)(

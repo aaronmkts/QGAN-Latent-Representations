@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import optax
 from flax.training import train_state
 from tqdm import tqdm
-
+import numpy as np
 from datamodules.mnist import MNISTDataModule
 from models.compression_methods.autoencoder import (
     Autoencoder,
@@ -25,7 +25,7 @@ from utils.logging import log_images, log_metrics, setup_wandb
 from utils.device import select_device
 from utils.seed import set_seed
 from utils.train_state import TrainStateWithBatchStats
-
+from utils.metrics_wrapper import MetricsManager
 
 def _gradient_penalty(
     discriminator: Discriminator,
@@ -166,9 +166,20 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     data.setup()
 
     print("Moving dataset to GPU...")
-    # This matches the efficient pattern from your pretrain loop
     train_images = jax.device_put(jnp.asarray(data.train_images))
-    print(f"Dataset on GPU. Shape: {train_images.shape}")
+    print(f"Dataset on GPU. Train: {train_images.shape}")
+
+    # Prepare Real Validation Images (CPU) ONCE
+    print("Preparing validation/test set for metrics...")
+    if hasattr(data, 'test_images'):
+        real_images_source = data.test_images
+    else:
+        real_images_source = data.train_images
+
+    metric_total_size = 500
+    real_images_10k = np.array(real_images_source[:metric_total_size])
+    if len(real_images_10k) < metric_total_size:
+         real_images_10k = np.array(real_images_source)
 
     n_samples = train_images.shape[0]
     steps_per_epoch = n_samples // cfg.batch_size
@@ -192,6 +203,11 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
         channels=cfg.model.discriminator.channels,
         mlp_dim=cfg.model.discriminator.mlp_dim,
     )
+
+    # --- Metrics Initialization (With Real Data) ---
+    print("Initializing metrics manager...")
+    metrics_manager = MetricsManager(cfg.metrics, real_images=real_images_10k)
+
 
     rng = jax.random.PRNGKey(cfg.seed)
     rng, init_rng, gen_rng, disc_rng = jax.random.split(rng, 4)
@@ -328,6 +344,33 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
             
             global_step += 1
 
+        # --- END OF EPOCH: Compute  Metrics ---
+
+        metric_batch_size = 100
+        fake_images_cpu = np.zeros((metric_total_size, 28, 28, 1), dtype=np.float32)
+        rng, metric_rng = jax.random.split(rng)
+        
+        for start_idx in range(0, metric_total_size, metric_batch_size):
+            end_idx = min(start_idx + metric_batch_size, metric_total_size)
+            current_bs = end_idx - start_idx
+            metric_rng, batch_rng = jax.random.split(metric_rng)
+            
+            batch_fake = _prepare_samples(
+                gen_apply, gen_state.params, autoencoder, ae_params, ae_batch_stats,
+                batch_rng, batch_size=current_bs, noise_dim=cfg.model.quantum_generator.noise_dim
+            )
+            fake_images_cpu[start_idx:end_idx] = np.array(batch_fake)
+
+        print("Computing Validation Metrics...")
+
+        metrics_manager.update(fake_images_cpu)
+        results = metrics_manager.compute()
+        log_str = f"Epoch {epoch} Metrics - " + ", ".join([f"{k.split('/')[-1]}: {v:.4f}" for k,v in results.items()])
+        print(log_str)
+        log_metrics(run, results, step=global_step)
+        metrics_manager.reset()
+        
+    
     epoch_bar.close()
     
     save_checkpoint(ckpt_dir / cfg.checkpoints.generator, gen_state.params)

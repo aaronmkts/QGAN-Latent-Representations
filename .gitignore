@@ -185,5 +185,5 @@ cython_debug/
 .vscode/
 outputs/
 checkpoints/
-data
+data/mnist
 wandb

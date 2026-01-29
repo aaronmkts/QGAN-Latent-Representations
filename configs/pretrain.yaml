@@ -15,7 +15,7 @@ device: gpu
 wandb_mode: online
 
 outputs:
-  dir: outputs/pretrain
+  dir: outputs/pretrainautoencoder
 
 checkpoints:
   dir: checkpoints

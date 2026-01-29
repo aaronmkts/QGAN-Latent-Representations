@@ -4,25 +4,14 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.spatial.distance import cosine
 from scipy.stats import entropy
-from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 from sklearn.cluster import MiniBatchKMeans
-
-# Try importing jax_fid, handle gracefully if missing
-try:
-    from jax_fid.inception import calculate_fid
-    JAX_FID_AVAILABLE = True
-except ImportError:
-    JAX_FID_AVAILABLE = False
-
-# From: https://github.com/eitanrich/gans-n-gmms/blob/master/utils/ndb.py
-
 import os
 import numpy as np
 import pickle as pkl
-
 from sklearn.cluster import KMeans
 from scipy.stats import norm
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
+
 
 class NDB:
     def __init__(self, training_data=None, number_of_bins=100, significance_level=0.05, z_threshold=None,
@@ -93,7 +82,7 @@ class NDB:
         if n//k > 1000:
             print('Training data size should be ~500 times the number of bins (for reasonable speed and accuracy)')
 
-        clusters = KMeans(n_clusters=k, max_iter=100, n_jobs=-1).fit(whitened_samples[:, self.used_d_indices])
+        clusters = KMeans(n_clusters=k, max_iter=100).fit(whitened_samples[:, self.used_d_indices])
 
         bin_centers = np.zeros([k, d])
         for i in range(k):
@@ -265,123 +254,3 @@ class NDB:
         p_pos = (p > 0)
         return np.sum(p[p_pos] * np.log(p[p_pos] / q[p_pos]))
 
-
-if __name__ == "__main__":
-    dim=100
-    k=100
-    n_train = k*100
-    n_test = k*10
-
-    train_samples = np.random.uniform(size=[n_train, dim])
-    ndb = NDB(training_data=train_samples, number_of_bins=k, whitening=True)
-
-    test_samples = np.random.uniform(high=1.0, size=[n_test, dim])
-    ndb.evaluate(test_samples, model_label='Test')
-
-    test_samples = np.random.uniform(high=0.9, size=[n_test, dim])
-    ndb.evaluate(test_samples, model_label='Good')
-
-    test_samples = np.random.uniform(high=0.75, size=[n_test, dim])
-    ndb.evaluate(test_samples, model_label='Bad')
-
-    ndb.plot_results(models_to_plot=['Test', 'Good', 'Bad'])
-    
-class MetricsCalculator:
-    def __init__(self, num_samples=10000, n_bins=50):
-        self.num_samples = num_samples
-        self.n_bins = n_bins
-        self.kmeans = None  # Lazy init for NDB
-
-    def compute_psnr_ssim(self, real: np.ndarray, fake: np.ndarray):
-        """
-        Computes average PSNR and SSIM for a batch of images.
-        Expects numpy arrays of shape (N, H, W, C) in range [0, 1].
-        """
-        psnr_vals = []
-        ssim_vals = []
-        
-        # Squeeze channel dim if it's 1 for skimage compatibility
-        real_sq = real.squeeze(-1) if real.shape[-1] == 1 else real
-        fake_sq = fake.squeeze(-1) if fake.shape[-1] == 1 else fake
-
-        for i in range(len(real)):
-            p = peak_signal_noise_ratio(real_sq[i], fake_sq[i], data_range=1.0)
-            s = structural_similarity(real_sq[i], fake_sq[i], data_range=1.0)
-            psnr_vals.append(p)
-            ssim_vals.append(s)
-
-        return np.mean(psnr_vals), np.mean(ssim_vals)
-
-    def compute_cosine_similarity(self, real: np.ndarray, fake: np.ndarray):
-        """
-        Computes average Cosine Similarity.
-        Flattens images to vectors first.
-        """
-        # Flatten: (N, H, W, C) -> (N, D)
-        real_flat = real.reshape(real.shape[0], -1)
-        fake_flat = fake.reshape(fake.shape[0], -1)
-        
-        # Cosine distance returns 1 - similarity. 
-        # We want similarity, so 1 - distance.
-        scores = []
-        for r, f in zip(real_flat, fake_flat):
-            # scipy cosine is "1 - cos_sim"
-            # epsilon added to norms to prevent div by zero in edge cases
-            sim = 1.0 - cosine(r, f) 
-            scores.append(sim)
-            
-        return np.mean(scores)
-
-    def compute_ndb_jsd(self, real: np.ndarray, fake: np.ndarray):
-        """
-        Number of Statistically Different Bins (NDB) and Jensen-Shannon Divergence (JSD).
-        Uses K-Means clustering on Real data to define bins.
-        """
-        # Flatten
-        real_flat = real.reshape(real.shape[0], -1)
-        fake_flat = fake.reshape(fake.shape[0], -1)
-
-        # 1. Fit KMeans on Real Data (Reference)
-        if self.kmeans is None:
-            self.kmeans = MiniBatchKMeans(n_clusters=self.n_bins, random_state=42)
-            self.kmeans.fit(real_flat)
-
-        # 2. Assign samples to bins
-        real_labels = self.kmeans.predict(real_flat)
-        fake_labels = self.kmeans.predict(fake_flat)
-
-        # 3. Calculate Histograms
-        real_hist, _ = np.histogram(real_labels, bins=self.n_bins, range=(0, self.n_bins))
-        fake_hist, _ = np.histogram(fake_labels, bins=self.n_bins, range=(0, self.n_bins))
-
-        # Normalize to probability distributions
-        real_prob = real_hist / real_hist.sum()
-        fake_prob = fake_hist / fake_hist.sum()
-
-        # 4. Calculate JSD
-        jsd = 0.5 * (entropy(real_prob, 0.5*(real_prob+fake_prob)) + 
-                     entropy(fake_prob, 0.5*(real_prob+fake_prob)))
-
-        # 5. Calculate NDB (Simple threshold check)
-        # A bin is "different" if the proportion difference is significant. 
-        # For simplicity here, we use a basic difference threshold.
-        # A rigorous test uses Z-scores, but simple diff is a good proxy for monitoring.
-        diff = np.abs(real_prob - fake_prob)
-        ndb = np.sum(diff > 0.05) # Threshold arbitrary, tune as needed
-
-        return ndb, jsd
-
-    def compute_fid(self, params, batch_stats, apply_fn, model_params):
-        """
-        Wrapper for jax-fid. 
-        NOTE: This requires the specific jax-fid library and Inception weights.
-        """
-        if not JAX_FID_AVAILABLE:
-            print("Warning: jax-fid not installed. Skipping FID.")
-            return 0.0
-            
-        # Implementation depends heavily on how jax-fid is invoked.
-        # Usually it requires paths to datasets or a specialized data loader.
-        # Since we are inside a custom loop, implementing full FID here is complex.
-        # Placeholder for integration:
-        return 0.0

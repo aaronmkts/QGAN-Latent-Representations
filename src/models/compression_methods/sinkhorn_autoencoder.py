@@ -6,6 +6,7 @@ from typing import Sequence
 from flax import struct
 import jax
 import jax.numpy as jnp
+from jax.scipy.special import logsumexp
 import optax
 
 from .autoencoder import Autoencoder, init_autoencoder_variables_with_shape
@@ -24,8 +25,11 @@ class SinkhornAutoencoderConfig:
     batch_size: int = 128
     loss: str = "mse"
     sinkhorn_weight: float = 1.0
+    lambda_sinkhorn: float | None = None
     sinkhorn_eps: float = 0.1
     sinkhorn_iters: int = 50
+    sinkhorn_cost: str = "l2_sq"
+    prior: str = "gaussian"
 
 
 @struct.dataclass
@@ -43,26 +47,48 @@ def _recon_loss(x: jnp.ndarray, x_hat: jnp.ndarray, loss_type: str) -> jnp.ndarr
     return jnp.mean((x - x_hat) ** 2)
 
 
-def _sinkhorn_distance(
-    x: jnp.ndarray, y: jnp.ndarray, epsilon: float, iters: int
+def _cost_matrix(x: jnp.ndarray, y: jnp.ndarray, cost_type: str) -> jnp.ndarray:
+    diff = x[:, None, :] - y[None, :, :]
+    if cost_type == "l2":
+        return jnp.sqrt(jnp.sum(diff**2, axis=-1) + 1e-8)
+    if cost_type == "l2_sq":
+        return jnp.sum(diff**2, axis=-1)
+    raise ValueError(f"Unsupported Sinkhorn cost type: {cost_type}")
+
+
+def _sample_prior(
+    rng: jax.random.KeyArray, shape: Sequence[int], prior: str
 ) -> jnp.ndarray:
-    cost = jnp.sum((x[:, None, :] - y[None, :, :]) ** 2, axis=-1)
-    k = jnp.exp(-cost / epsilon)
+    if prior == "gaussian":
+        return jax.random.normal(rng, shape)
+    if prior == "sphere":
+        samples = jax.random.normal(rng, shape)
+        norm = jnp.linalg.norm(samples, axis=-1, keepdims=True) + 1e-8
+        return samples / norm
+    raise ValueError(f"Unsupported Sinkhorn prior: {prior}")
+
+
+def _sinkhorn_distance(
+    x: jnp.ndarray, y: jnp.ndarray, epsilon: float, iters: int, cost_type: str = "l2_sq"
+) -> jnp.ndarray:
+    epsilon = jnp.maximum(epsilon, 1e-8)
+    cost = _cost_matrix(x, y, cost_type)
+    log_k = -cost / epsilon
     n = x.shape[0]
     m = y.shape[0]
-    a = jnp.ones((n,)) / n
-    b = jnp.ones((m,)) / m
-    u = jnp.ones_like(a)
-    v = jnp.ones_like(b)
+    log_a = -jnp.log(n)
+    log_b = -jnp.log(m)
+    log_u = jnp.zeros((n,))
+    log_v = jnp.zeros((m,))
 
     def body(_, state):
-        u, v = state
-        u = a / (k @ v + 1e-8)
-        v = b / (k.T @ u + 1e-8)
-        return u, v
+        log_u, log_v = state
+        log_u = log_a - logsumexp(log_k + log_v[None, :], axis=1)
+        log_v = log_b - logsumexp(log_k.T + log_u[None, :], axis=1)
+        return log_u, log_v
 
-    u, v = jax.lax.fori_loop(0, iters, body, (u, v))
-    transport = u[:, None] * k * v[None, :]
+    log_u, log_v = jax.lax.fori_loop(0, iters, body, (log_u, log_v))
+    transport = jnp.exp(log_u[:, None] + log_k + log_v[None, :])
     return jnp.sum(transport * cost)
 
 
@@ -81,9 +107,12 @@ def make_train_step(model: Autoencoder, config: SinkhornAutoencoderConfig):
                 variables, z, method=Autoencoder.decode, train=True, mutable=["batch_stats"]
             )
             recon_loss = _recon_loss(batch, recon, config.loss)
-            target = jax.random.normal(rng, z.shape)
-            sinkhorn = _sinkhorn_distance(z, target, config.sinkhorn_eps, config.sinkhorn_iters)
-            return recon_loss + config.sinkhorn_weight * sinkhorn, dec_updates["batch_stats"]
+            target = _sample_prior(rng, z.shape, config.prior)
+            sinkhorn = _sinkhorn_distance(
+                z, target, config.sinkhorn_eps, config.sinkhorn_iters, config.sinkhorn_cost
+            )
+            weight = config.sinkhorn_weight if config.lambda_sinkhorn is None else config.lambda_sinkhorn
+            return recon_loss + weight * sinkhorn, dec_updates["batch_stats"]
 
         (loss, new_batch_stats), grads = jax.value_and_grad(loss_fn, has_aux=True)(
             state.params

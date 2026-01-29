@@ -3,6 +3,7 @@ defaults:
   - model/quantum_generator@model.quantum_generator
   - model/discriminator@model.discriminator
   - data/mnist
+  - metrics: default
   - _self_
 
 seed: 42

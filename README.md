@@ -14,15 +14,47 @@ Notes:
 - MNIST is downloaded from Yann LeCun's site on first run.
 - W&B logging is optional and controlled in the config.
 
-## Pretrain the autoencoder
+## Pretrain a representation model
+
+Default (autoencoder):
 
 ```bash
 python pretrain.py
 ```
 
+VAE:
+
+```bash
+python pretrain.py model/vae@model.autoencoder
+```
+
+Sinkhorn AE:
+
+```bash
+python pretrain.py model/sinkhorn_ae@model.autoencoder
+```
+
+VQ-VAE:
+
+```bash
+python pretrain.py model/vqvae@model.autoencoder
+```
+
 Outputs:
-- Autoencoder checkpoint: `checkpoints/autoencoder.ckpt`
+- Pretrained checkpoint: `checkpoints/autoencoder.ckpt` (or `model.autoencoder.checkpoint_name`)
 - Reconstructions: `outputs/pretrain/`
+
+Model-specific knobs (Hydra config):
+- VAE: `model.autoencoder.beta`, `model.autoencoder.kl_anneal_steps`
+- Sinkhorn AE: `model.autoencoder.lambda_sinkhorn`, `model.autoencoder.sinkhorn_eps`, `model.autoencoder.sinkhorn_iters`, `model.autoencoder.sinkhorn_cost`
+- VQ-VAE: `model.autoencoder.num_embeddings`, `model.autoencoder.embedding_dim`, `model.autoencoder.commitment_cost`, `model.autoencoder.codebook_loss_weight`
+
+Checkpoint naming uses `model.autoencoder.checkpoint_name` when set; otherwise it falls back to `checkpoints.autoencoder`.
+
+Loss summaries:
+- VAE: reconstruction + `beta * KL(q(z|x) || p(z))`
+- Sinkhorn AE: reconstruction + `lambda_sinkhorn * Sinkhorn(z, z_prior)`
+- VQ-VAE: reconstruction + codebook loss + `commitment_cost * commitment`
 
 ## Train the QGAN
 
