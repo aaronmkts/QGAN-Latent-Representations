@@ -1,4 +1,24 @@
 from __future__ import annotations
+import os
+import multiprocessing
+try:
+    if hasattr(os, "sched_getaffinity"):
+        num_cores = len(os.sched_getaffinity(0))
+    else:
+        num_cores = multiprocessing.cpu_count()
+except Exception:
+    num_cores = 4 
+
+num_cores_str = str(num_cores)
+
+# Set environment variables for major math libraries
+os.environ["OMP_NUM_THREADS"] = num_cores_str
+os.environ["MKL_NUM_THREADS"] = num_cores_str
+os.environ["OPENBLAS_NUM_THREADS"] = num_cores_str
+os.environ["VECLIB_MAXIMUM_THREADS"] = num_cores_str
+os.environ["NUMEXPR_NUM_THREADS"] = num_cores_str
+
+print(f"🚀 Enforcing CPU parallelism: OMP_NUM_THREADS={num_cores_str}")
 
 import logging
 import sys

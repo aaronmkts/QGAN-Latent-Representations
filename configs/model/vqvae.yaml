@@ -1,0 +1,11 @@
+name: vqvae
+checkpoint_name: vqvae.ckpt
+latent_dim: 20
+encoder_channels: [64, 128]
+decoder_channels: [128, 64]
+mlp_dim: 1024
+tanh_latent: true
+num_embeddings: 256
+embedding_dim: 20
+commitment_cost: 0.25
+codebook_loss_weight: 1.0

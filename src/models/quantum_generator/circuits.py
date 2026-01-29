@@ -1,53 +1,39 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, List
 
 import jax.numpy as jnp
 import pennylane as qml
-
 
 @dataclass(frozen=True)
 class CircuitConfig:
     n_qubits: int
     depth: int
 
-
-def make_circuit(architecture_name: str, config: CircuitConfig) -> Callable:
-    name = architecture_name.lower()
-    if name == "fullyentangling":
-        entangle = _fully_entangling
-    elif name == "simpleentangling":
-        entangle = _simple_entangling
-    else:
-        raise ValueError(f"Unknown circuit architecture: {architecture_name}")
-
+def make_style_based_circuit(config: CircuitConfig) -> Callable:
+    """
+    Creates a style-based quantum circuit using PennyLane's JAX-compatible device.
+    """
+    # default.qubit is JAX-compatible and avoids NumPy conversion inside JIT.
     dev = qml.device("default.qubit", wires=config.n_qubits)
 
     @qml.qnode(dev, interface="jax", diff_method="backprop")
-    def circuit(q_params: jnp.ndarray, angles: jnp.ndarray) -> jnp.ndarray:
-        for i in range(config.n_qubits):
-            qml.RY(angles[i], wires=i)
-        for layer in range(config.depth):
+    def circuit(angles: jnp.ndarray) -> List[jnp.ndarray]:
+        # angles shape: (depth, n_qubits, 2)
+        
+        for d in range(config.depth):
             for i in range(config.n_qubits):
-                qml.Rot(
-                    q_params[layer, i, 0],
-                    q_params[layer, i, 1],
-                    q_params[layer, i, 2],
-                    wires=i,
-                )
-            entangle(config.n_qubits)
-        return [qml.expval(qml.PauliZ(i)) for i in range(config.n_qubits)]
+                theta_y = angles[d, i, 0]
+                theta_z = angles[d, i, 1]
+                qml.RY(theta_y, wires=i)
+                qml.RZ(theta_z, wires=i)
+            
+            for i in range(config.n_qubits - 1):
+                qml.CNOT(wires=[i, i + 1])
+                
+        # Return measurements
+        return [qml.expval(qml.PauliX(i)) for i in range(config.n_qubits)] + \
+               [qml.expval(qml.PauliZ(i)) for i in range(config.n_qubits)]
 
     return circuit
-
-
-def _simple_entangling(n_qubits: int) -> None:
-    for i in range(n_qubits - 1):
-        qml.CNOT(wires=[i, i + 1])
-
-
-def _fully_entangling(n_qubits: int) -> None:
-    for i in range(n_qubits):
-        for j in range(i + 1, n_qubits):
-            qml.CNOT(wires=[i, j])

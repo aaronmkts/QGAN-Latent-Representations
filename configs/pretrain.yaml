@@ -5,17 +5,17 @@ defaults:
 
 seed: 42
 batch_size: 128
-pretrain_epochs: 10
+pretrain_epochs: 100
 learning_rate: 1e-3
 loss: mse
-log_every: 100
+log_every: 50
 sample_every: 500
 smoke_test: false
-device: cpu
-wandb_mode: disabled
+device: gpu
+wandb_mode: online
 
 outputs:
-  dir: outputs/pretrain
+  dir: outputs/pretrainautoencoder
 
 checkpoints:
   dir: checkpoints

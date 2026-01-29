@@ -1,0 +1,13 @@
+name: sinkhorn_ae
+checkpoint_name: sinkhorn_ae.ckpt
+latent_dim: 20
+encoder_channels: [64, 128]
+decoder_channels: [128, 64]
+mlp_dim: 1024
+tanh_latent: true
+sinkhorn_weight: 1.0
+lambda_sinkhorn: 1.0
+sinkhorn_eps: 0.1
+sinkhorn_iters: 50
+sinkhorn_cost: l2_sq
+prior: gaussian

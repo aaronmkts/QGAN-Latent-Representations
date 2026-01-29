@@ -84,10 +84,16 @@ class MNISTDataModule:
     ) -> Iterator[dict]:
         if self.train_images is None:
             raise RuntimeError("Call setup() before requesting batches.")
+        
         rng = np.random.default_rng(seed)
         indices = np.arange(len(self.train_images))
+        
         if shuffle:
             rng.shuffle(indices)
+            
+        num_full_batches = len(indices) // batch_size
+        indices = indices[: num_full_batches * batch_size]
+
         for start in range(0, len(indices), batch_size):
             batch_idx = indices[start : start + batch_size]
             yield {

@@ -1,6 +1,9 @@
-name: autoencoder
+name: vae
+checkpoint_name: vae.ckpt
 latent_dim: 20
 encoder_channels: [64, 128]
 decoder_channels: [128, 64]
 mlp_dim: 1024
 tanh_latent: true
+beta: 1.0
+kl_anneal_steps: 0
