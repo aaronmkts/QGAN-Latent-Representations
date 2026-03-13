@@ -1,0 +1,19 @@
+defaults:
+  - model/spatial_vqvae@model.vqvae
+  - model/mps_prior@model.mps_prior
+  - data/mnist
+  - _self_
+
+seed: 42
+device: gpu
+wandb_mode: disabled
+log_every: 50
+sample_every: 500
+
+outputs:
+  dir: outputs/train_prior
+
+checkpoints:
+  dir: checkpoints
+  vqvae: spatial_vqvae.ckpt
+  mps_prior: mps_prior.ckpt

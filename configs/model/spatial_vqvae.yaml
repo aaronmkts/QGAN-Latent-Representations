@@ -1,0 +1,8 @@
+name: spatial_vqvae
+checkpoint_name: spatial_vqvae.ckpt
+embedding_dim: 8
+num_embeddings: 16
+encoder_channels: [64, 128]
+decoder_channels: [128, 64]
+commitment_cost: 0.25
+codebook_loss_weight: 1.0
