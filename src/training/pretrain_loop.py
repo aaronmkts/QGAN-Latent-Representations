@@ -18,6 +18,7 @@ from models.compression_methods.variational_autoencoder import (
     init_variational_variables,
 )
 from models.compression_methods.vqvae import VQVAE, init_vqvae_variables_with_shape
+from models.compression_methods.spatial_vqvae import SpatialVQVAE, init_spatial_vqvae_variables
 from utils.checkpointing import save_checkpoint
 from utils.image_grid import save_image_grid
 from utils.logging import log_images, log_metrics, setup_wandb
@@ -278,6 +279,73 @@ def _make_vqvae_train_step(model: VQVAE, loss_type: str, model_cfg=None):
 
     return train_step
 
+def _build_spatial_vqvae(model_cfg) -> SpatialVQVAE:
+    return SpatialVQVAE(
+        encoder_channels=model_cfg.encoder_channels,
+        decoder_channels=model_cfg.decoder_channels,
+        num_embeddings=model_cfg.num_embeddings,
+        embedding_dim=model_cfg.embedding_dim,
+    )
+
+def _init_spatial_vqvae(
+    model: SpatialVQVAE,
+    init_rng: jax.random.KeyArray,
+    input_shape: Tuple[int, ...],
+    sample_rng: jax.random.KeyArray,
+) -> dict:
+    del sample_rng
+    return init_spatial_vqvae_variables(init_rng, model, input_shape=input_shape)
+
+def _make_spatial_vqvae_train_step(model: SpatialVQVAE, loss_type: str, model_cfg=None):
+    codebook_weight = model_cfg.codebook_loss_weight
+    commitment_cost = model_cfg.commitment_cost
+
+    @jax.jit
+    def train_step(
+        state: TrainStateWithBatchStats,
+        batch: jnp.ndarray,
+        rng: jax.random.KeyArray,
+        step: int,
+    ):
+        del rng, step
+
+        def loss_fn(params):
+            variables = {"params": params, "batch_stats": state.batch_stats}
+            outputs, updates = model.apply(
+                variables, batch, train=True, mutable=["batch_stats"]
+            )
+            recon, codebook_loss, commitment_loss, perplexity = outputs
+            recon_loss = _recon_loss(batch, recon, loss_type)
+            total = recon_loss + codebook_weight * codebook_loss + commitment_cost * commitment_loss
+            return total, (
+                recon,
+                updates["batch_stats"],
+                recon_loss,
+                codebook_loss,
+                commitment_loss,
+                perplexity,
+            )
+
+        (loss, aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
+        (
+            recon,
+            new_batch_stats,
+            recon_loss,
+            codebook_loss,
+            commitment_loss,
+            perplexity,
+        ) = aux
+        new_state = state.apply_gradients(grads=grads).replace(batch_stats=new_batch_stats)
+        metrics = {
+            "recon_loss": recon_loss,
+            "codebook_loss": codebook_loss,
+            "commitment_loss": commitment_loss,
+            "perplexity": perplexity,
+        }
+        return new_state, loss, recon, metrics
+
+    return train_step
+
 PRETRAIN_MODEL_REGISTRY = {
     "autoencoder": PretrainModelSpec(
         build_model=_build_autoencoder,
@@ -308,6 +376,11 @@ PRETRAIN_MODEL_REGISTRY = {
         build_model=_build_vqvae,
         init_variables=_init_vqvae,
         make_train_step=_make_vqvae_train_step,
+    ),
+    "spatial_vqvae": PretrainModelSpec(
+        build_model=_build_spatial_vqvae,
+        init_variables=_init_spatial_vqvae,
+        make_train_step=_make_spatial_vqvae_train_step,
     ),
 }
 
