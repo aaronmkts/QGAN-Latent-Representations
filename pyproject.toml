@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "qgan-latent-representations"
 version = "0.1.0"
-description = "Minimal JAX + PennyLane QGAN with latent compression methods."
+description = "Two-workflow JAX/PennyLane testbed for latent-representation generative modelling, including latent-space QGANs and tensor-prior VQ-VAE experiments."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

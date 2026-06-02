@@ -1,11 +1,11 @@
-# QGAN Latent Representations
+# QGAN Latent Representations Testbed
 
-This repository contains a JAX/Flax/PennyLane research pipeline for generative modeling in learned MNIST latent spaces. It currently treats two workflows as first-class:
+This repository is a JAX/Flax/PennyLane testbed for latent-representation generative modelling on MNIST. It currently treats two research workflows as first-class projects:
 
-- Train a representation model, then train a latent-space QGAN with a classical discriminator.
-- Train a Spatial VQ-VAE, then train an MPS Born-machine prior over its codebook-index sequences.
+- **Latent-space QGAN workflow:** train a representation model, then train a latent-space quantum GAN with a classical discriminator.
+- **Tensor-prior VQ-VAE workflow:** train a Spatial VQ-VAE, then train an MPS Born-machine prior over its codebook-index sequences.
 
-The current goal is high-level functionality and clear wiring before research-quality tuning.
+The current goal is high-level functionality, clear wiring, and reproducible smoke checks before research-quality tuning.
 
 ## Setup
 
@@ -33,7 +33,7 @@ The root scripts `pretrain.py`, `train.py`, and `train_prior.py` remain as compa
 
 ## Smoke Checks
 
-Smoke mode uses deterministic synthetic MNIST-shaped data, disables W&B, and avoids requiring pretrained checkpoints. These commands check wiring, not sample quality.
+Smoke mode uses deterministic synthetic MNIST-shaped data, disables W&B, and avoids requiring pretrained checkpoints. These commands check wiring, config composition, checkpoint creation, and entrypoint behaviour; they do not establish sample quality.
 
 ```bash
 qgan-pretrain smoke_test=true device=cpu wandb_mode=disabled
@@ -58,7 +58,9 @@ Run the test suite with:
 pytest -q
 ```
 
-## Workflow 1: Representation + Latent QGAN
+## Workflow 1: Latent-Space QGAN
+
+This workflow trains a representation model and then trains a latent-space QGAN against the learned representation.
 
 Pretrain the default Spatial VQ-VAE representation:
 
@@ -81,7 +83,7 @@ qgan-pretrain 'model@model.autoencoder=vqvae'
 qgan-pretrain 'model@model.autoencoder=spatial_vqvae'
 ```
 
-Then train the latent-space QGAN:
+Then train the latent-space QGAN using the configured autoencoder checkpoint path:
 
 ```bash
 qgan-train
@@ -93,7 +95,9 @@ Outputs:
 - QGAN generator/discriminator checkpoints in `checkpoints/`
 - Reconstructions and sample grids in `outputs/`
 
-## Workflow 2: Spatial VQ-VAE + MPS Prior
+## Workflow 2: Tensor-Prior VQ-VAE
+
+This workflow trains a Spatial VQ-VAE and then trains an MPS Born-machine prior over the model's discrete codebook-index sequences.
 
 Train the Spatial VQ-VAE:
 
@@ -121,6 +125,12 @@ Outputs:
 - `qgan_latent.models.mps_prior`: JAX and optional quimb MPS prior utilities.
 - `qgan_latent.training`: pretraining, QGAN, MPS-prior loops, and smoke helpers.
 - `qgan_latent.utils`: checkpoints, device selection, logging, metrics, paths, seeds, image grids.
+
+## Documentation Scope
+
+Repository documentation should stay operational and reviewable: setup, commands, smoke checks, architecture, configuration, and reproducibility. Long-form research notes, paper extractions, theory development, experiment interpretation, negative results, and cross-stream synthesis belong in Aaron's Obsidian PhD research graph.
+
+Canonical research note: `Research/PhD/QGAN Latent Representations.md`.
 
 ## Notes
 
