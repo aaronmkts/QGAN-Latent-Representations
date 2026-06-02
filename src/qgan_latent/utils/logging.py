@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 from omegaconf import OmegaConf
 
-from utils.image_grid import make_grid
+from qgan_latent.utils.image_grid import make_grid
 
 
 def setup_wandb(cfg, mode: str) -> Optional[Any]:

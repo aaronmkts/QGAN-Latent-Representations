@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from utils.train_state import TrainStateWithBatchStats
+from qgan_latent.utils.train_state import TrainStateWithBatchStats
 
 
 class Encoder(nn.Module):

@@ -187,3 +187,4 @@ outputs/
 checkpoints/
 data/mnist
 wandb
+lancedb/

@@ -1,31 +1,30 @@
 from __future__ import annotations
 
-import math
 from functools import partial
-from pathlib import Path
 from typing import Tuple
 
-import hydra
 import jax
 import jax.numpy as jnp
 import optax
 from flax.training import train_state
 from tqdm import tqdm
 import numpy as np
-from datamodules.mnist import MNISTDataModule
-from models.compression_methods.autoencoder import (
+from qgan_latent.datamodules.mnist import MNISTDataModule
+from qgan_latent.models.compression_methods.autoencoder import (
     Autoencoder,
     init_autoencoder_variables_with_shape,
 )
-from models.discriminator import Discriminator, init_discriminator_params
-from models.quantum_generator import build_generator_apply, init_generator_params, sample_noise
-from utils.checkpointing import load_checkpoint, save_checkpoint
-from utils.image_grid import save_image_grid
-from utils.logging import log_images, log_metrics, setup_wandb
-from utils.device import select_device
-from utils.seed import set_seed
-from utils.train_state import TrainStateWithBatchStats
-from utils.metrics_wrapper import MetricsManager
+from qgan_latent.models.discriminator import Discriminator, init_discriminator_params
+from qgan_latent.models.quantum_generator import build_generator_apply, init_generator_params, sample_noise
+from qgan_latent.utils.checkpointing import load_checkpoint, save_checkpoint
+from qgan_latent.utils.image_grid import save_image_grid
+from qgan_latent.utils.logging import log_images, log_metrics, setup_wandb
+from qgan_latent.utils.device import select_device
+from qgan_latent.utils.seed import set_seed
+from qgan_latent.utils.train_state import TrainStateWithBatchStats
+from qgan_latent.utils.metrics_wrapper import MetricsManager
+from qgan_latent.training.smoke import synthetic_mnist_images
+from qgan_latent.utils.paths import get_run_root
 
 def _gradient_penalty(
     discriminator: Discriminator,
@@ -160,29 +159,36 @@ def _prepare_samples(
 def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     select_device(cfg.device)
     set_seed(cfg.seed)
-    
-    # --- Data Loading (Preload to GPU) ---
-    data = MNISTDataModule(cfg.data.data_dir, num_workers=cfg.data.num_workers)
-    data.setup()
 
-    print("Moving dataset to GPU...")
-    train_images = jax.device_put(jnp.asarray(data.train_images))
-    print(f"Dataset on GPU. Train: {train_images.shape}")
+    smoke_test = bool(getattr(cfg, "smoke_test", False))
+    if smoke_test:
+        train_source = synthetic_mnist_images(8)
+        real_images_source = np.array(train_source)
+    else:
+        data = MNISTDataModule(cfg.data.data_dir, num_workers=cfg.data.num_workers)
+        data.setup()
+        train_source = jnp.asarray(data.train_images)
+        real_images_source = data.test_images if hasattr(data, "test_images") else data.train_images
+
+    # --- Data Loading (Preload to Device) ---
+    print("Moving dataset to device...")
+    train_images = jax.device_put(train_source)
+    print(f"Dataset on device. Train: {train_images.shape}")
 
     # Prepare Real Validation Images (CPU) ONCE
     print("Preparing validation/test set for metrics...")
-    if hasattr(data, 'test_images'):
-        real_images_source = data.test_images
-    else:
-        real_images_source = data.train_images
-
-    metric_total_size = 500
+    metric_total_size = min(8, len(real_images_source)) if smoke_test else 500
     real_images_10k = np.array(real_images_source[:metric_total_size])
     if len(real_images_10k) < metric_total_size:
          real_images_10k = np.array(real_images_source)
 
     n_samples = train_images.shape[0]
-    steps_per_epoch = n_samples // cfg.batch_size
+    batch_size = min(int(cfg.batch_size), int(n_samples)) if smoke_test else int(cfg.batch_size)
+    steps_per_epoch = max(1, n_samples // batch_size)
+    epochs = 1 if smoke_test else int(cfg.epochs)
+    log_every = 1 if smoke_test else int(cfg.log_every)
+    sample_every = 1 if smoke_test else int(cfg.sample_every)
+    sample_batch_size = 4 if smoke_test else 64
 
     # --- Verification of Paper Constraints ---
     expected_dim = 2 * cfg.model.quantum_generator.n_qubits
@@ -220,14 +226,15 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     ae_batch_stats = ae_variables["batch_stats"]
 
     # Load Pretrained AE Checkpoint
-    ckpt_dir = Path(hydra.utils.get_original_cwd()) / cfg.checkpoints.dir
+    ckpt_dir = get_run_root() / cfg.checkpoints.dir
     ae_ckpt = ckpt_dir / cfg.checkpoints.autoencoder
     if not ae_ckpt.exists():
-        raise FileNotFoundError("Pretrained Autoencoder checkpoint is required for LaSt-QGAN.")
-        
-    loaded = load_checkpoint(ae_ckpt, {"params": ae_params, "batch_stats": ae_batch_stats})
-    ae_params = loaded["params"]
-    ae_batch_stats = loaded["batch_stats"]
+        if not smoke_test:
+            raise FileNotFoundError("Pretrained Autoencoder checkpoint is required for LaSt-QGAN.")
+    else:
+        loaded = load_checkpoint(ae_ckpt, {"params": ae_params, "batch_stats": ae_batch_stats})
+        ae_params = loaded["params"]
+        ae_batch_stats = loaded["batch_stats"]
 
     # Initialize Generator
     gen_params = init_generator_params(
@@ -276,20 +283,20 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     )
 
     run = setup_wandb(cfg, mode="train")
-    orig_cwd = Path(hydra.utils.get_original_cwd())
+    orig_cwd = get_run_root()
     output_dir = orig_cwd / cfg.outputs.dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # --- Epoch-Based Training Loop ---
     global_step = 0
-    epoch_bar = tqdm(range(cfg.epochs), desc="Train epochs")
+    epoch_bar = tqdm(range(epochs), desc="Train epochs")
     
     for epoch in epoch_bar:
         # Shuffle data indices every epoch
         rng, perm_rng = jax.random.split(rng)
         perms = jax.random.permutation(perm_rng, n_samples)
-        perms = perms[:steps_per_epoch * cfg.batch_size]
-        perms = perms.reshape((steps_per_epoch, cfg.batch_size))
+        perms = perms[: steps_per_epoch * batch_size]
+        perms = perms.reshape((steps_per_epoch, batch_size))
 
         for i in tqdm(range(steps_per_epoch), desc="Batches", leave=False):
             
@@ -316,17 +323,17 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
                     gen_state, 
                     disc_state.params, 
                     step_rng, 
-                    cfg.batch_size
+                    batch_size
                 )
 
             # 4. Logging & Sampling
-            if global_step % cfg.log_every == 0:
+            if global_step % log_every == 0:
                 # Merge metrics (gen_metrics might be empty if we didn't update G this step)
                 combined_metrics = {**disc_metrics, **gen_metrics}
                 metrics = {f"train/{k}": float(v) for k, v in combined_metrics.items()}
                 log_metrics(run, metrics, step=global_step)
 
-            if global_step % cfg.sample_every == 0:
+            if global_step % sample_every == 0:
                 rng, sample_rng = jax.random.split(rng)
                 samples = _prepare_samples(
                     gen_apply,
@@ -335,7 +342,7 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
                     ae_params,
                     ae_batch_stats,
                     sample_rng,
-                    batch_size=64,
+                    batch_size=sample_batch_size,
                     noise_dim=cfg.model.quantum_generator.noise_dim,
                 )
                 sample_path = output_dir / f"samples_step_{global_step:06d}.png"
@@ -346,7 +353,7 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
 
         # --- END OF EPOCH: Compute  Metrics ---
 
-        metric_batch_size = 100
+        metric_batch_size = min(4, metric_total_size) if smoke_test else 100
         fake_images_cpu = np.zeros((metric_total_size, 28, 28, 1), dtype=np.float32)
         rng, metric_rng = jax.random.split(rng)
         

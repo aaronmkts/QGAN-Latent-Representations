@@ -9,31 +9,25 @@ Stage 2 of the VQ-VAE pipeline:
 
 from __future__ import annotations
 
-import math
-from functools import partial
-from pathlib import Path
-from typing import Tuple
-
-import hydra
 import jax
 import jax.numpy as jnp
-import numpy as np
 import optax
-from flax.training import train_state
 from tqdm import tqdm
 
-from datamodules.mnist import MNISTDataModule
-from models.compression_methods.spatial_vqvae import (
+from qgan_latent.datamodules.mnist import MNISTDataModule
+from qgan_latent.models.compression_methods.spatial_vqvae import (
     SpatialVQVAE,
     init_spatial_vqvae_variables,
 )
-from models.mps_prior.mps import init_mps_params, mps_nll_loss, mps_sample
-from models.mps_prior.quimb_mps import init_quimb_mps, quimb_sample
-from utils.checkpointing import load_checkpoint, save_checkpoint
-from utils.device import select_device
-from utils.image_grid import save_image_grid
-from utils.logging import log_images, log_metrics, setup_wandb
-from utils.seed import set_seed
+from qgan_latent.models.mps_prior.mps import init_mps_params, mps_nll_loss, mps_sample
+from qgan_latent.models.mps_prior.quimb_mps import quimb_sample
+from qgan_latent.utils.checkpointing import load_checkpoint, save_checkpoint
+from qgan_latent.utils.device import select_device
+from qgan_latent.utils.image_grid import save_image_grid
+from qgan_latent.utils.logging import log_images, log_metrics, setup_wandb
+from qgan_latent.utils.seed import set_seed
+from qgan_latent.training.smoke import synthetic_mnist_images
+from qgan_latent.utils.paths import get_run_root
 
 
 def _build_vqvae(cfg) -> SpatialVQVAE:
@@ -101,17 +95,42 @@ def _decode_from_indices(
     )
 
 
+def _sample_from_prior(
+    mps_params: dict,
+    rng: jax.random.KeyArray,
+    n_samples: int,
+    sample_backend: str,
+) -> jnp.ndarray:
+    sample_backend = sample_backend.lower()
+    if sample_backend == "jax":
+        return mps_sample(mps_params, rng, n_samples)
+    if sample_backend == "quimb":
+        return quimb_sample(mps_params["tensors"], rng, n_samples)
+    if sample_backend == "auto":
+        try:
+            return quimb_sample(mps_params["tensors"], rng, n_samples)
+        except ImportError:
+            return mps_sample(mps_params, rng, n_samples)
+    raise ValueError(f"Unknown sample backend '{sample_backend}'. Expected one of: jax, quimb, auto.")
+
+
 def run_mps_prior(cfg) -> dict:
     """Main training function for MPS prior."""
     select_device(cfg.device)
     set_seed(cfg.seed)
 
+    smoke_test = bool(getattr(cfg, "smoke_test", False))
+    if smoke_test:
+        train_source = synthetic_mnist_images(8)
+    else:
+        data = MNISTDataModule(cfg.data.data_dir)
+        data.setup()
+        train_source = jnp.asarray(data.train_images)
+
     # --- Data Loading ---
-    data = MNISTDataModule(cfg.data.data_dir)
-    data.setup()
-    print("Moving dataset to GPU...")
-    train_images = jax.device_put(jnp.asarray(data.train_images))
-    print(f"Dataset on GPU. Shape: {train_images.shape}")
+    print("Moving dataset to device...")
+    train_images = jax.device_put(train_source)
+    print(f"Dataset on device. Shape: {train_images.shape}")
 
     # --- Load Pretrained Spatial VQ-VAE ---
     vqvae = _build_vqvae(cfg)
@@ -120,22 +139,23 @@ def run_mps_prior(cfg) -> dict:
 
     vqvae_vars = init_spatial_vqvae_variables(init_rng, vqvae, input_shape=(28, 28, 1))
 
-    orig_cwd = Path(hydra.utils.get_original_cwd())
+    orig_cwd = get_run_root()
     ckpt_dir = orig_cwd / cfg.checkpoints.dir
     vqvae_ckpt = ckpt_dir / cfg.checkpoints.vqvae
 
     if not vqvae_ckpt.exists():
-        raise FileNotFoundError(
-            f"Pretrained Spatial VQ-VAE checkpoint not found at {vqvae_ckpt}. "
-            "Run: python pretrain.py model/spatial_vqvae@model.autoencoder"
-        )
-
-    loaded = load_checkpoint(vqvae_ckpt, {
-        "params": vqvae_vars["params"],
-        "batch_stats": vqvae_vars["batch_stats"],
-    })
-    vqvae_vars = {"params": loaded["params"], "batch_stats": loaded["batch_stats"]}
-    print("Loaded pretrained Spatial VQ-VAE checkpoint.")
+        if not smoke_test:
+            raise FileNotFoundError(
+                f"Pretrained Spatial VQ-VAE checkpoint not found at {vqvae_ckpt}. "
+                "Run: python pretrain.py 'model@model.autoencoder=spatial_vqvae'"
+            )
+    else:
+        loaded = load_checkpoint(vqvae_ckpt, {
+            "params": vqvae_vars["params"],
+            "batch_stats": vqvae_vars["batch_stats"],
+        })
+        vqvae_vars = {"params": loaded["params"], "batch_stats": loaded["batch_stats"]}
+        print("Loaded pretrained Spatial VQ-VAE checkpoint.")
 
     # --- Extract Codebook Indices ---
     print("Extracting codebook indices from training data...")
@@ -148,20 +168,33 @@ def run_mps_prior(cfg) -> dict:
     n_sites = mps_cfg.n_sites
     phys_dim = mps_cfg.phys_dim
     bond_dim = mps_cfg.bond_dim
-    use_quimb = mps_cfg.use_quimb
+    sample_backend = getattr(
+        mps_cfg,
+        "sample_backend",
+        "quimb" if getattr(mps_cfg, "use_quimb", False) else "jax",
+    )
+    n_sample_vis = getattr(mps_cfg, "n_sample_vis", 64)
 
     rng, mps_rng = jax.random.split(rng)
-
-    if use_quimb:
-        mps_params = init_quimb_mps(mps_rng, n_sites, phys_dim, bond_dim)
-        print(f"Initialized quimb MPS: {n_sites} sites, phys_dim={phys_dim}, bond_dim={bond_dim}")
-    else:
-        mps_params = init_mps_params(mps_rng, n_sites, phys_dim, bond_dim)
-        print(f"Initialized JAX MPS: {n_sites} sites, phys_dim={phys_dim}, bond_dim={bond_dim}")
+    mps_params = init_mps_params(mps_rng, n_sites, phys_dim, bond_dim)
+    print(
+        f"Initialized JAX MPS: {n_sites} sites, phys_dim={phys_dim}, "
+        f"bond_dim={bond_dim}, sample_backend={sample_backend}"
+    )
 
     # --- Optimizer ---
-    # Use a pytree-compatible optimizer: wrap tensor list in a dict
-    tx = optax.adam(mps_cfg.learning_rate)
+    grad_clip_norm = getattr(mps_cfg, "grad_clip_norm", 0.0)
+    weight_decay = getattr(mps_cfg, "weight_decay", 0.0)
+    tx_parts = []
+    if grad_clip_norm and grad_clip_norm > 0:
+        tx_parts.append(optax.clip_by_global_norm(grad_clip_norm))
+    tx_parts.append(
+        optax.adamw(
+            mps_cfg.learning_rate,
+            weight_decay=weight_decay,
+        )
+    )
+    tx = optax.chain(*tx_parts)
     opt_state = tx.init(mps_params)
 
     # --- Training ---
@@ -170,8 +203,11 @@ def run_mps_prior(cfg) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     n_samples = all_indices.shape[0]
-    batch_size = mps_cfg.batch_size
-    steps_per_epoch = n_samples // batch_size
+    batch_size = min(int(mps_cfg.batch_size), int(n_samples)) if smoke_test else int(mps_cfg.batch_size)
+    steps_per_epoch = max(1, n_samples // batch_size)
+    epochs = 1 if smoke_test else int(mps_cfg.epochs)
+    log_every = 1 if smoke_test else int(cfg.log_every)
+    sample_every = 1 if smoke_test else int(cfg.sample_every)
 
     @jax.jit
     def train_step(params, batch):
@@ -179,7 +215,7 @@ def run_mps_prior(cfg) -> dict:
         return loss, grads
 
     global_step = 0
-    epoch_bar = tqdm(range(mps_cfg.epochs), desc="MPS Prior epochs")
+    epoch_bar = tqdm(range(epochs), desc="MPS Prior epochs")
 
     for epoch in epoch_bar:
         rng, perm_rng = jax.random.split(rng)
@@ -199,18 +235,17 @@ def run_mps_prior(cfg) -> dict:
 
             epoch_loss += float(loss)
 
-            if global_step % cfg.log_every == 0:
+            if global_step % log_every == 0:
                 log_metrics(run, {"prior/nll": float(loss)}, step=global_step)
 
-            if global_step % cfg.sample_every == 0:
+            if global_step % sample_every == 0:
                 rng, sample_rng = jax.random.split(rng)
-                n_vis = 64
-                if use_quimb:
-                    sampled = quimb_sample(
-                        mps_params["tensors"], sample_rng, n_vis
-                    )
-                else:
-                    sampled = mps_sample(mps_params, sample_rng, n_vis)
+                sampled = _sample_from_prior(
+                    mps_params,
+                    sample_rng,
+                    n_sample_vis,
+                    sample_backend,
+                )
 
                 # Decode through VQ-VAE
                 images = _decode_from_indices(vqvae, vqvae_vars, sampled)

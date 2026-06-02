@@ -1,10 +1,23 @@
-torch 
-pennylane
-numpy
-jax
-optax
-hydra
-hydra
+# Conda is the source of truth for this project; prefer:
+#   conda env create -f environment.yml
+#
+# This file is kept as a pip compatibility list for editable installs.
 flax
-tqdm
+hydra-core
+jax
+jaxlib
+joblib
+matplotlib
+numpy
+omegaconf
+optax
+pillow
+pennylane
+pytest==8.4.2
 quimb
+scikit-image
+scikit-learn
+scipy
+tqdm
+wandb
+-e .

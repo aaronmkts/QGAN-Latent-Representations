@@ -1,91 +1,130 @@
-# Latent Style-based Quantum GAN (Minimal JAX + PennyLane)
+# QGAN Latent Representations
 
-This repo contains a minimal, runnable pipeline inspired by the LaSt-QGAN paper. It trains a convolutional autoencoder to learn a low-dimensional latent space, then trains a quantum generator in that latent space against a classical discriminator.
+This repository contains a JAX/Flax/PennyLane research pipeline for generative modeling in learned MNIST latent spaces. It currently treats two workflows as first-class:
+
+- Train a representation model, then train a latent-space QGAN with a classical discriminator.
+- Train a Spatial VQ-VAE, then train an MPS Born-machine prior over its codebook-index sequences.
+
+The current goal is high-level functionality and clear wiring before research-quality tuning.
 
 ## Setup
 
+Conda is the source of truth for the environment.
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+conda env create -f environment.yml
+conda activate qlatent
 ```
 
-Notes:
-- MNIST is downloaded from Yann LeCun's site on first run.
-- W&B logging is optional and controlled in the config.
-
-## Pretrain a representation model
-
-Default (autoencoder):
+For an existing environment:
 
 ```bash
-python pretrain.py
+conda env update -f environment.yml
+conda activate qlatent
 ```
 
-VAE:
+The environment installs the package in editable mode. Preferred commands are the console scripts:
+
+- `qgan-pretrain`
+- `qgan-train`
+- `qgan-train-prior`
+
+The root scripts `pretrain.py`, `train.py`, and `train_prior.py` remain as compatibility wrappers after editable installation.
+
+## Smoke Checks
+
+Smoke mode uses deterministic synthetic MNIST-shaped data, disables W&B, and avoids requiring pretrained checkpoints. These commands check wiring, not sample quality.
 
 ```bash
-python pretrain.py model/vae@model.autoencoder
+qgan-pretrain smoke_test=true device=cpu wandb_mode=disabled
 ```
 
-Sinkhorn AE:
-
 ```bash
-python pretrain.py model/sinkhorn_ae@model.autoencoder
+qgan-train smoke_test=true device=cpu wandb_mode=disabled metrics.active_metrics=[] \
+  model.autoencoder.latent_dim=4 model.quantum_generator.n_qubits=2 \
+  model.quantum_generator.noise_dim=2 model.quantum_generator.depth=1
 ```
 
-VQ-VAE:
+```bash
+qgan-train-prior smoke_test=true device=cpu wandb_mode=disabled \
+  model.vqvae.num_embeddings=4 model.vqvae.embedding_dim=2 \
+  model.mps_prior.phys_dim=4 model.mps_prior.bond_dim=2 \
+  model.mps_prior.epochs=1 model.mps_prior.batch_size=4
+```
+
+Run the test suite with:
 
 ```bash
-python pretrain.py model/vqvae@model.autoencoder
+pytest -q
+```
+
+## Workflow 1: Representation + Latent QGAN
+
+Pretrain the default Spatial VQ-VAE representation:
+
+```bash
+qgan-pretrain
+```
+
+Pretrain an autoencoder for the QGAN path:
+
+```bash
+qgan-pretrain 'model@model.autoencoder=autoencoder'
+```
+
+Other representation configs:
+
+```bash
+qgan-pretrain 'model@model.autoencoder=vae'
+qgan-pretrain 'model@model.autoencoder=sinkhorn_ae'
+qgan-pretrain 'model@model.autoencoder=vqvae'
+qgan-pretrain 'model@model.autoencoder=spatial_vqvae'
+```
+
+Then train the latent-space QGAN:
+
+```bash
+qgan-train
 ```
 
 Outputs:
-- Pretrained checkpoint: `checkpoints/autoencoder.ckpt` (or `model.autoencoder.checkpoint_name`)
-- Reconstructions: `outputs/pretrain/`
 
-Model-specific knobs (Hydra config):
-- VAE: `model.autoencoder.beta`, `model.autoencoder.kl_anneal_steps`
-- Sinkhorn AE: `model.autoencoder.lambda_sinkhorn`, `model.autoencoder.sinkhorn_eps`, `model.autoencoder.sinkhorn_iters`, `model.autoencoder.sinkhorn_cost`
-- VQ-VAE: `model.autoencoder.num_embeddings`, `model.autoencoder.embedding_dim`, `model.autoencoder.commitment_cost`, `model.autoencoder.codebook_loss_weight`
+- Representation checkpoints in `checkpoints/`
+- QGAN generator/discriminator checkpoints in `checkpoints/`
+- Reconstructions and sample grids in `outputs/`
 
-Checkpoint naming uses `model.autoencoder.checkpoint_name` when set; otherwise it falls back to `checkpoints.autoencoder`.
+## Workflow 2: Spatial VQ-VAE + MPS Prior
 
-Loss summaries:
-- VAE: reconstruction + `beta * KL(q(z|x) || p(z))`
-- Sinkhorn AE: reconstruction + `lambda_sinkhorn * Sinkhorn(z, z_prior)`
-- VQ-VAE: reconstruction + codebook loss + `commitment_cost * commitment`
-
-## Train the QGAN
+Train the Spatial VQ-VAE:
 
 ```bash
-python train.py
+qgan-pretrain 'model@model.autoencoder=spatial_vqvae'
+```
+
+Train the MPS prior over the Spatial VQ-VAE codebook indices:
+
+```bash
+qgan-train-prior
 ```
 
 Outputs:
-- Generator checkpoint: `checkpoints/qgan_gen.ckpt`
-- Discriminator checkpoint: `checkpoints/qgan_disc.ckpt`
-- Sample grids: `outputs/train/`
 
-## Architecture overview
+- Spatial VQ-VAE checkpoint in `checkpoints/spatial_vqvae.ckpt`
+- MPS prior checkpoint in `checkpoints/mps_prior.ckpt`
+- Decoded MPS samples in `outputs/train_prior/`
 
-1. **Autoencoder** (JAX/Flax): CNN encoder maps 1x28x28 MNIST images to a low-dimensional latent vector. Decoder reconstructs images from the latent code.
-2. **Quantum generator** (PennyLane + JAX): noise -> parameterized quantum circuit -> Pauli-Z expectations -> linear projection -> latent code.
-3. **Discriminator** (JAX/Flax): small CNN that scores real vs fake images.
-4. **Training**: WGAN-GP on images. Generator outputs latent vectors; decoder maps them to images.
+## Architecture
 
-## Configs
+- `qgan_latent.datamodules`: MNIST download/loading.
+- `qgan_latent.models.compression_methods`: AE, VAE, Sinkhorn AE, VQ-VAE, Spatial VQ-VAE.
+- `qgan_latent.models.quantum_generator`: PennyLane/JAX style-based quantum generator.
+- `qgan_latent.models.mps_prior`: JAX and optional quimb MPS prior utilities.
+- `qgan_latent.training`: pretraining, QGAN, MPS-prior loops, and smoke helpers.
+- `qgan_latent.utils`: checkpoints, device selection, logging, metrics, paths, seeds, image grids.
 
-Hydra manages configs in `configs/`. Key defaults:
-- Autoencoder latent dim: 20
-- Quantum generator: 8 qubits, depth 4
-- WGAN-GP: `lambda_gp = 10`
-- Batch size: 128
+## Notes
 
-Use `smoke_test=true` to run a short wiring check.
-
-## Known limitations
-
-- This is a minimal reference implementation; it is not tuned for sample quality.
+- W&B is optional and disabled by default in configs.
+- Full MNIST training downloads data into `data/mnist/`.
+- Runtime artifacts are ignored under `outputs/`, `checkpoints/`, `data/mnist/`, `wandb/`, and `lancedb/`.
 - The quantum circuit runs on a simulator and can be slow for large batch sizes.
-- MNIST download requires network access.

@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import optax
 
 from .autoencoder import Decoder, Encoder
-from utils.train_state import TrainStateWithBatchStats
+from qgan_latent.utils.train_state import TrainStateWithBatchStats
 
 
 def _flatten_latents(

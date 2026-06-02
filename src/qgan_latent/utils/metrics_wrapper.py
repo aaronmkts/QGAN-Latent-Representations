@@ -38,6 +38,8 @@ class MetricsManager:
 
     def compute(self) -> dict[str, float]:
         results = {}
+        if not self.metrics:
+            return results
         
         # OPTIMIZATION: Execute metric computations in parallel threads
         # This helps if any metric is blocking (though SSIM/PSNR are now multi-process via joblib)
@@ -216,4 +218,3 @@ class CosineSimilarityMetric(BaseMetric):
         
         return float(np.mean(res))
     
-

@@ -2,8 +2,12 @@ name: mps_prior
 checkpoint_name: mps_prior.ckpt
 n_sites: 49
 phys_dim: 16
-bond_dim: 32
-use_quimb: false
-learning_rate: 1e-3
-epochs: 50
+bond_dim: 64
+learning_rate: 3e-4
+weight_decay: 1e-5
+grad_clip_norm: 1.0
+epochs: 75
 batch_size: 256
+sample_backend: jax
+n_sample_vis: 64
+use_quimb: false

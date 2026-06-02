@@ -12,14 +12,12 @@ epochs: 100
 n_critic: 5
 gen_lr: 1e-4
 disc_lr: 1e-4
-ae_lr: 1e-4
 lambda_gp: 10.0
 sample_every: 200
 log_every: 50
-finetune_ae: false
 smoke_test: false
 device: GPU
-wandb_mode: online
+wandb_mode: disabled
 
 outputs:
   dir: outputs/train

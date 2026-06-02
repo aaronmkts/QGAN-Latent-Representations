@@ -11,7 +11,7 @@ import optax
 
 from .autoencoder import Autoencoder, init_autoencoder_variables_with_shape
 from .sinkhorn_autoencoder import _sample_prior, _sinkhorn_distance
-from utils.train_state import TrainStateWithBatchStats
+from qgan_latent.utils.train_state import TrainStateWithBatchStats
 
 
 class LatentClassifier(nn.Module):

@@ -158,7 +158,7 @@ class NDB:
         train_se = calc_se(self.bin_proportions, self.ref_sample_size,
                            self.bin_proportions, self.cached_results[models_to_plot[0]]['N'])
         plt.bar(np.arange(0, K)+0.5, height=train_se*2.0, bottom=self.bin_proportions-train_se,
-                width=1.0, label='Train$\pm$SE', color='gray')
+                width=1.0, label=r'Train$\pm$SE', color='gray')
 
         ymax = 0.0
         for i, model in enumerate(models_to_plot):
@@ -253,4 +253,3 @@ class NDB:
 
         p_pos = (p > 0)
         return np.sum(p[p_pos] * np.log(p[p_pos] / q[p_pos]))
-
