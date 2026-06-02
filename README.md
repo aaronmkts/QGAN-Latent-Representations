@@ -122,6 +122,17 @@ Outputs:
 - `qgan_latent.training`: pretraining, QGAN, MPS-prior loops, and smoke helpers.
 - `qgan_latent.utils`: checkpoints, device selection, logging, metrics, paths, seeds, image grids.
 
+## Research Memory Boundary
+
+This repository is the execution layer for the QGAN latent-representation stream. Keep repository documentation focused on setup, commands, tests, architecture, and reproducibility.
+
+Long-form research material belongs in Obsidian instead:
+
+- PhD stream note: `Research/PhD/QGAN Latent Representations.md`
+- Use that note for paper extractions, theory development, experiment interpretation, negative results, and cross-stream synthesis.
+
+This keeps the codebase reviewable while preserving the actual research memory in the PhD graph.
+
 ## Notes
 
 - W&B is optional and disabled by default in configs.

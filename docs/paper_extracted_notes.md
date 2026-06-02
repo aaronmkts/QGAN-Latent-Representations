@@ -1,23 +1,25 @@
-# Paper extracted notes (LaSt-QGAN)
+# Research-memory boundary
 
-Source: `Latent Style-based Quantum GAN for high-quality Image Generation.pdf` (local-rag)
-Accessed: 2026-01-20
+This file previously held extracted paper notes for the LaSt-QGAN workstream. Stage 1 moves that material into Aaron's Obsidian PhD research graph so the repository remains focused on runnable code, setup, tests, and reproducibility.
 
-## Extracted
+Canonical research note:
 
-- Latent-space training pipeline:
-  - Quote: "This novel approach relies on powerful classical auto-encoders to map a high-dimensional original image dataset into a latent representation. The hybrid classical-quantum GAN operates in this latent space to generate an arbitrary number of fake features, which are then passed back to the auto-encoder to reconstruct the original data." (chunk 2)
-- WGAN-GP usage:
-  - Quote: "Additionally, Wasserstein loss with gradient penalty ... is used for better convergence in the model." (chunk 44)
-- Latent dimension for MNIST/FashionMNIST autoencoder:
-  - Quote: "... autoencoder architecture with latent space of dimension 20 for MNIST and FashionMNIST datasets." (chunk 312)
-- Latent range constraint:
-  - Quote: "We apply the Tanh activation function at the end of the encoder to ensure that the latent features are confined within the range of [ -1 , 1 ]." (chunk 314)
-- MNIST qubit note:
-  - Quote: "... generate high-quality MNIST images on discretized latent space ... using 8 qubits." (chunk 310)
+- Obsidian: `Research/PhD/QGAN Latent Representations.md`
 
-## Assumptions (not explicitly specified in the paper text we extracted)
+Repository docs should contain:
 
-- Training steps, batch size, and learning rates: defaults chosen for a minimal runnable baseline (see `configs/pretrain.yaml` and `configs/train.yaml`).
-- Autoencoder architecture: small CNN encoder/decoder used to keep runtime light; only the latent dimension and tanh constraint are matched to the paper.
-- Generator circuit depth: set to 4 for a minimal circuit; paper uses multiple circuit variants and depths, but exact choices are not fully specified in extracted text.
+- setup instructions
+- CLI commands and smoke checks
+- architecture/API notes
+- reproducibility guidance
+- links to experiment artifacts when needed
+
+Repository docs should not contain:
+
+- evolving PhD theory notes
+- paper extraction dumps
+- hypothesis interpretation
+- negative-result narratives
+- cross-stream research synthesis
+
+Those belong in Obsidian, where they can link to the wider PhD graph.
