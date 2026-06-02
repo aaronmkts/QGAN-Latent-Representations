@@ -2,4 +2,24 @@ name: qlatent
 channels:
   - conda-forge
 dependencies:
-  - python=3.13.5
+  - python=3.11
+  - flax
+  - hydra-core
+  - jax
+  - joblib
+  - matplotlib
+  - numpy
+  - omegaconf
+  - optax
+  - pillow
+  - pip
+  - pytest
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - tqdm
+  - wandb
+  - pip:
+      - pennylane
+      - quimb
+      - -e .

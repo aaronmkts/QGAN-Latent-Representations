@@ -10,7 +10,7 @@ from jax.scipy.special import logsumexp
 import optax
 
 from .autoencoder import Autoencoder, init_autoencoder_variables_with_shape
-from utils.train_state import TrainStateWithBatchStats
+from qgan_latent.utils.train_state import TrainStateWithBatchStats
 
 
 @struct.dataclass

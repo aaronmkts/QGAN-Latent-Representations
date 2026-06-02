@@ -1,10 +1,10 @@
 defaults:
-  - model/autoencoder@model.autoencoder
+  - model/spatial_vqvae@model.autoencoder
   - data/mnist
   - _self_
 
 seed: 42
-batch_size: 128
+batch_size: 256
 pretrain_epochs: 100
 learning_rate: 1e-3
 loss: mse
@@ -12,7 +12,7 @@ log_every: 50
 sample_every: 500
 smoke_test: false
 device: gpu
-wandb_mode: online
+wandb_mode: disabled
 
 outputs:
   dir: outputs/pretrainautoencoder

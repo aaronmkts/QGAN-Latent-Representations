@@ -1,30 +1,30 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Callable, Tuple
-import hydra
 import jax
 import jax.numpy as jnp
 import optax
 from tqdm import tqdm
-from datamodules.mnist import MNISTDataModule
-from models.compression_methods.autoencoder import (
+from qgan_latent.datamodules.mnist import MNISTDataModule
+from qgan_latent.models.compression_methods.autoencoder import (
     Autoencoder,
     init_autoencoder_variables_with_shape,    
 )
-from models.compression_methods.sinkhorn_autoencoder import _sample_prior, _sinkhorn_distance
-from models.compression_methods.variational_autoencoder import (
+from qgan_latent.models.compression_methods.sinkhorn_autoencoder import _sample_prior, _sinkhorn_distance
+from qgan_latent.models.compression_methods.variational_autoencoder import (
     VariationalAutoencoder,
     init_variational_variables,
 )
-from models.compression_methods.vqvae import VQVAE, init_vqvae_variables_with_shape
-from models.compression_methods.spatial_vqvae import SpatialVQVAE, init_spatial_vqvae_variables
-from utils.checkpointing import save_checkpoint
-from utils.image_grid import save_image_grid
-from utils.logging import log_images, log_metrics, setup_wandb
-from utils.device import select_device
-from utils.seed import set_seed
-from utils.train_state import TrainStateWithBatchStats
+from qgan_latent.models.compression_methods.vqvae import VQVAE, init_vqvae_variables_with_shape
+from qgan_latent.models.compression_methods.spatial_vqvae import SpatialVQVAE, init_spatial_vqvae_variables
+from qgan_latent.utils.checkpointing import save_checkpoint
+from qgan_latent.utils.image_grid import save_image_grid
+from qgan_latent.utils.logging import log_images, log_metrics, setup_wandb
+from qgan_latent.utils.device import select_device
+from qgan_latent.utils.seed import set_seed
+from qgan_latent.training.smoke import synthetic_mnist_images
+from qgan_latent.utils.paths import get_run_root
+from qgan_latent.utils.train_state import TrainStateWithBatchStats
 
 
 @dataclass(frozen=True)
@@ -396,14 +396,24 @@ def run_pretrain(cfg) -> Tuple[dict, TrainStateWithBatchStats]:
     select_device(cfg.device)
     set_seed(cfg.seed)
 
-    data = MNISTDataModule(cfg.data.data_dir)
-    data.setup()
-    print("Moving dataset to GPU...")
-    train_images = jax.device_put(jnp.asarray(data.train_images))
-    print(f"Dataset on GPU. Shape: {train_images.shape}")
+    smoke_test = bool(getattr(cfg, "smoke_test", False))
+    if smoke_test:
+        train_images = synthetic_mnist_images(8)
+    else:
+        data = MNISTDataModule(cfg.data.data_dir)
+        data.setup()
+        train_images = jnp.asarray(data.train_images)
+
+    print("Moving dataset to device...")
+    train_images = jax.device_put(train_images)
+    print(f"Dataset on device. Shape: {train_images.shape}")
 
     n_samples = train_images.shape[0]
-    steps_per_epoch = n_samples // cfg.batch_size
+    batch_size = min(int(cfg.batch_size), int(n_samples)) if smoke_test else int(cfg.batch_size)
+    steps_per_epoch = max(1, n_samples // batch_size)
+    pretrain_epochs = 1 if smoke_test else int(cfg.pretrain_epochs)
+    log_every = 1 if smoke_test else int(cfg.log_every)
+    sample_every = 1 if smoke_test else int(cfg.sample_every)
 
     model_cfg = cfg.model.autoencoder
     model_name = getattr(model_cfg, "name", "autoencoder")
@@ -432,17 +442,17 @@ def run_pretrain(cfg) -> Tuple[dict, TrainStateWithBatchStats]:
     train_step = spec.make_train_step(model, cfg.loss, model_cfg)
 
     run = setup_wandb(cfg, mode="pretrain")
-    orig_cwd = Path(hydra.utils.get_original_cwd())
+    orig_cwd = get_run_root()
     output_dir = orig_cwd / cfg.outputs.dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
     global_step = 0
-    epoch_bar = tqdm(range(cfg.pretrain_epochs), desc="Pretrain epochs")
+    epoch_bar = tqdm(range(pretrain_epochs), desc="Pretrain epochs")
     for epoch in epoch_bar:
         rng, perm_rng = jax.random.split(rng)
         perms = jax.random.permutation(perm_rng, n_samples)
-        perms = perms[:steps_per_epoch * cfg.batch_size]  
-        perms = perms.reshape((steps_per_epoch, cfg.batch_size))
+        perms = perms[: steps_per_epoch * batch_size]
+        perms = perms.reshape((steps_per_epoch, batch_size))
 
         for i in tqdm(range(steps_per_epoch), desc="Batches", leave=False):
             batch_idx = perms[i]
@@ -453,14 +463,14 @@ def run_pretrain(cfg) -> Tuple[dict, TrainStateWithBatchStats]:
                 state, batch_images, step_rng, step
             )
 
-            if global_step % cfg.log_every == 0:
+            if global_step % log_every == 0:
                 log_payload = {"pretrain/loss": float(loss)}
                 log_payload.update(
                     {f"pretrain/{key}": float(value) for key, value in metrics.items()}
                 )
                 log_metrics(run, log_payload, step=global_step)
 
-            if global_step % cfg.sample_every == 0:
+            if global_step % sample_every == 0:
                 grid = _prepare_recon_grid(batch_images, recon)
                 sample_path = output_dir / f"recon_step_{global_step:06d}.png"
                 save_image_grid(grid, sample_path, nrow=2)

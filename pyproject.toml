@@ -7,19 +7,34 @@ name = "qgan-latent-representations"
 version = "0.1.0"
 description = "Minimal JAX + PennyLane QGAN with latent compression methods."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
   "flax",
-  "hydra",
+  "hydra-core",
+  "omegaconf",
   "jax",
+  "joblib",
+  "matplotlib",
   "numpy",
   "optax",
+  "pillow",
   "pennylane",
+  "quimb",
+  "scikit-image",
+  "scikit-learn",
+  "scipy",
   "tqdm",
+  "wandb",
 ]
+
+[project.scripts]
+qgan-pretrain = "qgan_latent.cli.pretrain:main"
+qgan-train = "qgan_latent.cli.train:main"
+qgan-train-prior = "qgan_latent.cli.train_prior:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["qgan_latent*"]

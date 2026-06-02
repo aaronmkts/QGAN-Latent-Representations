@@ -15,6 +15,15 @@ from typing import Sequence
 import jax
 import jax.numpy as jnp
 
+_LOG_EPS = 1e-30
+
+
+def _stable_scale(x: jnp.ndarray) -> jnp.ndarray:
+    """Return a finite positive rescaling factor for an intermediate contraction."""
+    scale = jnp.max(jnp.abs(x))
+    finite_scale = jnp.where(jnp.isfinite(scale) & (scale > _LOG_EPS), scale, 1.0)
+    return finite_scale
+
 
 def init_mps_params(
     rng: jax.random.KeyArray,
@@ -79,8 +88,19 @@ def _batch_log_amplitudes(
         (batch_size,) array of log|ψ(config)|.
     """
     def single_log_amp(config):
-        amp = _contract_amplitude(tensors, config)
-        return jnp.log(jnp.abs(amp) + 1e-30)
+        vec = tensors[0][config[0]]
+        scale = _stable_scale(vec)
+        vec = vec / scale
+        log_scale = jnp.log(scale)
+
+        for i in range(1, len(tensors)):
+            mat = tensors[i][config[i]]
+            vec = vec @ mat
+            scale = _stable_scale(vec)
+            vec = vec / scale
+            log_scale = log_scale + jnp.log(scale)
+
+        return jnp.log(jnp.abs(vec.squeeze()) + _LOG_EPS) + log_scale
 
     return jax.vmap(single_log_amp)(configs)
 
@@ -116,12 +136,18 @@ def compute_log_norm_sq(tensors: Sequence[jnp.ndarray]) -> jnp.ndarray:
     T = _compute_transfer_matrix(tensors[0])  # (1, dr*dr)
     # For boundary: dl=1, so T is (1, dr*dr)
     vec = T  # (1, dr*dr)
+    scale = _stable_scale(vec)
+    vec = vec / scale
+    log_scale = jnp.log(scale)
     for i in range(1, len(tensors)):
         T_i = _compute_transfer_matrix(tensors[i])  # (dl*dl, dr*dr)
         vec = vec @ T_i  # (1, dr*dr)
+        scale = _stable_scale(vec)
+        vec = vec / scale
+        log_scale = log_scale + jnp.log(scale)
     # Final: vec is (1, 1)
     norm_sq = vec.squeeze()
-    return jnp.log(jnp.abs(norm_sq) + 1e-30)
+    return jnp.log(jnp.abs(norm_sq) + _LOG_EPS) + log_scale
 
 
 def mps_nll_loss(params: dict, batch_indices: jnp.ndarray) -> jnp.ndarray:
@@ -224,13 +250,13 @@ def mps_sample(
                     val = contracted @ right_envs[i + 1]  # scalar
                 else:
                     val = contracted.sum()  # last site: dr=1
-                probs = probs.at[s].set(jnp.abs(val))
+                probs = probs.at[s].set(jnp.clip(val, a_min=0.0))
 
             # Normalize
-            probs = probs / (jnp.sum(probs) + 1e-30)
+            probs = probs / (jnp.sum(probs) + _LOG_EPS)
 
             # Sample
-            chosen = jax.random.categorical(sub, jnp.log(probs + 1e-30))
+            chosen = jax.random.categorical(sub, jnp.log(probs + _LOG_EPS))
             samples.append(chosen)
 
             # Update left context
@@ -238,7 +264,7 @@ def mps_sample(
             left_vec = left_vec @ mat_chosen  # (dr*dr,)
             # Normalize to prevent overflow
             scale = jnp.max(jnp.abs(left_vec))
-            left_vec = left_vec / (scale + 1e-30)
+            left_vec = left_vec / (scale + _LOG_EPS)
 
         return jnp.stack(samples)
 

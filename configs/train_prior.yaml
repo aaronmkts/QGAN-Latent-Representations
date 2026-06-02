@@ -6,6 +6,7 @@ defaults:
 
 seed: 42
 device: gpu
+smoke_test: false
 wandb_mode: disabled
 log_every: 50
 sample_every: 500
