@@ -250,7 +250,7 @@ def mps_sample(
                     val = contracted @ right_envs[i + 1]  # scalar
                 else:
                     val = contracted.sum()  # last site: dr=1
-                probs = probs.at[s].set(jnp.clip(val, a_min=0.0))
+                probs = probs.at[s].set(jnp.maximum(val, 0.0))
 
             # Normalize
             probs = probs / (jnp.sum(probs) + _LOG_EPS)
