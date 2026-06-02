@@ -1,4 +1,4 @@
-# Research-memory boundary
+# Research-note boundary
 
 This file previously held extracted paper notes for the LaSt-QGAN workstream. Stage 1 moves that material into Aaron's Obsidian PhD research graph so the repository remains focused on runnable code, setup, tests, and reproducibility.
 
@@ -6,7 +6,7 @@ Canonical research note:
 
 - Obsidian: `Research/PhD/QGAN Latent Representations.md`
 
-Repository docs should contain:
+Repository docs should contain operational material:
 
 - setup instructions
 - CLI commands and smoke checks
@@ -14,7 +14,7 @@ Repository docs should contain:
 - reproducibility guidance
 - links to experiment artifacts when needed
 
-Repository docs should not contain:
+Repository docs should not contain long-form research memory:
 
 - evolving PhD theory notes
 - paper extraction dumps

@@ -1,9 +1,11 @@
 # AGENTS.md
 
-This repository is a research codebase for latent-representation generative modeling on MNIST. It currently supports two first-class workflows:
+This repository is a research testbed for latent-representation generative modelling on MNIST. It currently supports two first-class project workflows:
 
-- Representation pretraining followed by a latent-space QGAN.
-- Spatial VQ-VAE pretraining followed by an MPS Born-machine prior over codebook indices.
+- Latent-space QGAN: representation pretraining followed by a latent-space QGAN with a classical discriminator.
+- Tensor-prior VQ-VAE: Spatial VQ-VAE pretraining followed by an MPS Born-machine prior over codebook indices.
+
+Stage 1 is documentation/metadata framing only. Stage 2 may separate Hydra configs into shared and project-specific groups. Do not move Python namespaces or production modules until a later namespace-refactor stage.
 
 ## Structure
 
@@ -13,7 +15,7 @@ This repository is a research codebase for latent-representation generative mode
 - `src/qgan_latent/models/` contains representation models, quantum generator code, discriminators, and MPS priors.
 - `src/qgan_latent/training/` contains training loops and smoke-test helpers.
 - `src/qgan_latent/utils/` contains checkpointing, device, image-grid, logging, metrics, path, seed, and train-state helpers.
-- `configs/` contains Hydra configs. Keep config groups under `configs/model`, `configs/data`, and `configs/metrics`.
+- `configs/` contains Hydra configs. Current compatibility config groups live under `configs/model`, `configs/data`, and `configs/metrics`; planned Stage 2 work may split these into shared and project-specific config groups while preserving top-level config names.
 - `tests/` contains pytest coverage for configs, package imports, model initialization, checkpoints, and smoke modes.
 
 ## Coding Conventions
@@ -22,7 +24,7 @@ This repository is a research codebase for latent-representation generative mode
 - Do not add `sys.path` mutation to production code or scripts.
 - Keep root scripts (`pretrain.py`, `train.py`, `train_prior.py`) as thin compatibility wrappers around `qgan_latent.cli`.
 - Prefer small helper modules when behavior is shared across training loops.
-- Keep training defaults research-oriented, but keep smoke paths short and deterministic.
+- Keep training defaults research-oriented, but keep smoke paths short and deterministic. Smoke checks verify wiring and checkpoints, not sample quality.
 - W&B must be optional. Default configs and smoke commands should run with `wandb_mode=disabled`.
 - Preserve ignored runtime artifacts unless the user explicitly asks to clean them.
 
@@ -39,9 +41,9 @@ This repository is a research codebase for latent-representation generative mode
 - Activate: `conda activate qlatent`
 - Run tests: `pytest -q`
 - Compile check: `python -m compileall -q src pretrain.py train.py train_prior.py`
-- Pretrain: `qgan-pretrain`
-- Train QGAN: `qgan-train`
-- Train MPS prior: `qgan-train-prior`
+- Pretrain representation models: `qgan-pretrain`
+- Train the latent-space QGAN workflow: `qgan-train`
+- Train the tensor-prior VQ-VAE workflow: `qgan-train-prior`
 
 ## Artifacts
 
