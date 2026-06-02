@@ -4,9 +4,9 @@ from pathlib import Path
 
 from hydra import compose, initialize_config_dir
 
-from qgan_latent.training.gan_loop import run_gan
-from qgan_latent.training.mps_prior_loop import run_mps_prior
-from qgan_latent.training.pretrain_loop import run_pretrain
+from qgan_latent.workflows.qgan_expectation_values.training.gan_loop import run_gan
+from qgan_latent.workflows.tensor_prior_vqvae.training.mps_prior_loop import run_mps_prior
+from qgan_latent.shared.training.pretrain_loop import run_pretrain
 
 
 def _compose(name: str, overrides: list[str]):

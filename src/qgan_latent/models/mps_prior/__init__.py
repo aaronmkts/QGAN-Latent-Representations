@@ -1,21 +1,10 @@
-from .mps import (
-    init_mps_params,
-    mps_nll_loss,
-    mps_sample,
-    compute_log_norm_sq,
-)
-from .quimb_mps import (
-    init_quimb_mps,
-    quimb_sample,
-    quimb_norm_sq,
-)
+from __future__ import annotations
 
-__all__ = [
-    "init_mps_params",
-    "mps_nll_loss",
-    "mps_sample",
-    "compute_log_norm_sq",
-    "init_quimb_mps",
-    "quimb_sample",
-    "quimb_norm_sq",
-]
+import warnings
+
+from qgan_latent.workflows.tensor_prior_vqvae.models.mps_prior import *  # noqa: F401,F403
+warnings.warn(
+    "qgan_latent.models.mps_prior.__init__ is deprecated; use qgan_latent.workflows.tensor_prior_vqvae.models.mps_prior instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
