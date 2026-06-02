@@ -4,8 +4,7 @@
 # This file is kept as a pip compatibility list for editable installs.
 flax
 hydra-core
-jax
-jaxlib
+jax[cuda12]
 joblib
 matplotlib
 numpy

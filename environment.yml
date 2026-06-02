@@ -5,7 +5,7 @@ dependencies:
   - python=3.11
   - flax
   - hydra-core
-  - jax
+  # CUDA-enabled JAX is installed from pip so WSL/GPU workspaces use GPU by default.
   - joblib
   - matplotlib
   - numpy
@@ -20,6 +20,7 @@ dependencies:
   - tqdm
   - wandb
   - pip:
+      - jax[cuda12]
       - pennylane
       - quimb
       - -e .

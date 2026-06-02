@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import time
@@ -19,9 +20,12 @@ VQ-VAE and Spatial VQ-VAE are reserved for the tensor-prior/MPS workflow.
 
 TENSOR_PRIOR_REPRESENTATION = "spatial_vqvae"
 DEFAULT_OUTPUT_ROOT = Path("outputs/experiments/stage5_test_run")
+DEFAULT_DEVICE = "gpu"
 DEFAULT_OBSIDIAN_RELATIVE_PATH = Path(
     "Research/PhD/Experiments/QGAN Latent Representations - Stage 5 Test Run.md"
 )
+DEFAULT_OBSIDIAN_HANDOFF_DIRNAME = "obsidian_handoff"
+DEFAULT_OBSIDIAN_HANDOFF_FILENAME = "QGAN Latent Representations - Stage 5 Test Run.md"
 
 
 @dataclass(frozen=True)
@@ -69,7 +73,7 @@ def _latent_pretrain_run(output_root: Path, representation: str, epochs: int) ->
         "qgan-latent-pretrain",
         f"shared/representations@model.autoencoder={representation}",
         f"pretrain_epochs={epochs}",
-        "device=cpu",
+        f"device={DEFAULT_DEVICE}",
         "wandb_mode=disabled",
         _path_override("outputs.dir", output_dir),
         _path_override("checkpoints.dir", checkpoint_dir),
@@ -90,19 +94,18 @@ def _latent_pretrain_run(output_root: Path, representation: str, epochs: int) ->
 def _latent_qgan_run(output_root: Path, representation: str, epochs: int) -> ExperimentRun:
     output_dir = output_root / "latent_qgan" / representation / "qgan_train"
     pretrain_checkpoint_dir = output_root / "latent_qgan" / representation / "pretrain" / "checkpoints"
+    train_checkpoint_dir = output_dir / "checkpoints"
     checkpoint_name = f"{representation}.ckpt"
+    pretrained_checkpoint = pretrain_checkpoint_dir / checkpoint_name
     command = (
         "qgan-latent-train",
         f"shared/representations@model.autoencoder={representation}",
         f"epochs={epochs}",
-        "device=cpu",
+        f"device={DEFAULT_DEVICE}",
         "wandb_mode=disabled",
         _path_override("outputs.dir", output_dir),
-        # Current training code uses checkpoints.dir for loading the pretrained
-        # autoencoder checkpoint. Generator/discriminator checkpoint routing is
-        # therefore limited by the underlying CLI contract.
-        _path_override("checkpoints.dir", pretrain_checkpoint_dir),
-        f"checkpoints.autoencoder={checkpoint_name}",
+        _path_override("checkpoints.dir", train_checkpoint_dir),
+        _path_override("checkpoints.autoencoder", pretrained_checkpoint),
     )
     return ExperimentRun(
         name=f"latent_{representation}_qgan_{epochs}ep",
@@ -113,8 +116,8 @@ def _latent_qgan_run(output_root: Path, representation: str, epochs: int) -> Exp
         output_dir=output_dir,
         log_path=output_dir / "stage5.log",
         expected_outputs=(
-            pretrain_checkpoint_dir / "qgan_gen.ckpt",
-            pretrain_checkpoint_dir / "qgan_disc.ckpt",
+            train_checkpoint_dir / "qgan_gen.ckpt",
+            train_checkpoint_dir / "qgan_disc.ckpt",
         ),
     )
 
@@ -127,7 +130,7 @@ def _vqvae_pretrain_run(output_root: Path, epochs: int) -> ExperimentRun:
         "qgan-vqvae-pretrain",
         "shared/representations@model.autoencoder=spatial_vqvae",
         f"pretrain_epochs={epochs}",
-        "device=cpu",
+        f"device={DEFAULT_DEVICE}",
         "wandb_mode=disabled",
         _path_override("outputs.dir", output_dir),
         _path_override("checkpoints.dir", checkpoint_dir),
@@ -148,18 +151,17 @@ def _vqvae_pretrain_run(output_root: Path, epochs: int) -> ExperimentRun:
 def _mps_prior_run(output_root: Path, epochs: int) -> ExperimentRun:
     output_dir = output_root / "tensor_prior_vqvae" / "mps_prior_train"
     pretrain_checkpoint_dir = output_root / "tensor_prior_vqvae" / "spatial_vqvae_pretrain" / "checkpoints"
+    train_checkpoint_dir = output_dir / "checkpoints"
+    pretrained_vqvae_checkpoint = pretrain_checkpoint_dir / "spatial_vqvae.ckpt"
     command = (
         "qgan-vqvae-train-prior",
         "shared/representations@model.vqvae=spatial_vqvae",
         f"model.mps_prior.epochs={epochs}",
-        "device=cpu",
+        f"device={DEFAULT_DEVICE}",
         "wandb_mode=disabled",
         _path_override("outputs.dir", output_dir),
-        # The MPS-prior loop currently uses checkpoints.dir for both loading the
-        # VQ-VAE and saving the prior. Point it at the VQ-VAE pretrain directory
-        # so the short Stage 5 test can exercise the actual dependency.
-        _path_override("checkpoints.dir", pretrain_checkpoint_dir),
-        "checkpoints.vqvae=spatial_vqvae.ckpt",
+        _path_override("checkpoints.dir", train_checkpoint_dir),
+        _path_override("checkpoints.vqvae", pretrained_vqvae_checkpoint),
     )
     return ExperimentRun(
         name=f"mps_prior_train_{epochs}ep",
@@ -169,7 +171,7 @@ def _mps_prior_run(output_root: Path, epochs: int) -> ExperimentRun:
         command=command,
         output_dir=output_dir,
         log_path=output_dir / "stage5.log",
-        expected_outputs=(pretrain_checkpoint_dir / "mps_prior.ckpt",),
+        expected_outputs=(train_checkpoint_dir / "mps_prior.ckpt",),
     )
 
 
@@ -221,6 +223,7 @@ def render_summary_markdown(
         "## Scope",
         "",
         "- Latent-QGAN runs use only continuous latent representations: autoencoder, vae, sinkhorn_ae.",
+        f"- Device override: {DEFAULT_DEVICE}.",
         "- VQ-VAE variants are excluded from latent-QGAN tests by design.",
         "- The MPS-prior workflow uses only Spatial VQ-VAE codebook outputs.",
         "",
@@ -306,6 +309,49 @@ def write_obsidian_note(
     note_path.write_text(note, encoding="utf-8")
     return note_path
 
+def write_obsidian_handoff(
+    note: str,
+    *,
+    output_root: Path,
+    filename: str = DEFAULT_OBSIDIAN_HANDOFF_FILENAME,
+) -> Path:
+    handoff_dir = output_root / DEFAULT_OBSIDIAN_HANDOFF_DIRNAME
+    handoff_dir.mkdir(parents=True, exist_ok=True)
+    note_path = handoff_dir / filename
+    note_path.write_text(note, encoding="utf-8")
+    return note_path
+
+
+def render_summary_json(
+    plan: Stage5Plan,
+    statuses: Sequence[ExperimentStatus],
+    *,
+    git_commit: str | None = None,
+) -> str:
+    payload = {
+        "run_id": plan.run_id,
+        "epochs": plan.epochs,
+        "output_root": plan.output_root.as_posix(),
+        "git_commit": git_commit or "unknown",
+        "device": DEFAULT_DEVICE,
+        "results": [
+            {
+                "name": status.run.name,
+                "workflow": status.run.workflow,
+                "representation": status.run.representation,
+                "phase": status.run.phase,
+                "passed": status.passed,
+                "returncode": status.returncode,
+                "output_dir": status.run.output_dir.as_posix(),
+                "log_path": status.log_path.as_posix(),
+                "elapsed_seconds": round(status.elapsed_seconds, 2),
+                "expected_outputs": [path.as_posix() for path in status.run.expected_outputs],
+            }
+            for status in statuses
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
+
 
 def run_experiment(run: ExperimentRun, *, dry_run: bool = False) -> ExperimentStatus:
     run.output_dir.mkdir(parents=True, exist_ok=True)
@@ -362,8 +408,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--dry-run", action="store_true", help="Write commands/logs without executing training.")
-    parser.add_argument("--write-obsidian", action="store_true", help="Write a compact Obsidian experiment note.")
+    parser.add_argument("--write-obsidian", action="store_true", help="Write a compact Obsidian experiment note directly when the vault is locally accessible.")
     parser.add_argument("--obsidian-vault", type=Path, default=None)
+    parser.add_argument("--obsidian-handoff", action="store_true", help="Write a compact Obsidian note artifact under the run output for ORION/VPS filing.")
     args = parser.parse_args(argv)
 
     plan = build_stage5_plan(run_id=args.run_id, epochs=args.epochs, output_root=args.output_root)
@@ -374,11 +421,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         render_summary_markdown(plan, statuses, git_commit=commit),
         encoding="utf-8",
     )
+    (plan.output_root / "stage5_test_run_summary.json").write_text(
+        render_summary_json(plan, statuses, git_commit=commit),
+        encoding="utf-8",
+    )
+    obsidian_note = render_obsidian_note(plan, statuses, git_commit=commit)
     if args.write_obsidian:
         write_obsidian_note(
-            render_obsidian_note(plan, statuses, git_commit=commit),
+            obsidian_note,
             vault_path=args.obsidian_vault,
         )
+    if args.obsidian_handoff:
+        write_obsidian_handoff(obsidian_note, output_root=plan.output_root)
     return 0 if all(status.passed for status in statuses) and len(statuses) == len(plan.runs) else 1
 
 

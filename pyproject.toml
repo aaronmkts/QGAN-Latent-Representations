@@ -12,7 +12,7 @@ dependencies = [
   "flax",
   "hydra-core",
   "omegaconf",
-  "jax",
+  "jax[cuda12]",
   "joblib",
   "matplotlib",
   "numpy",

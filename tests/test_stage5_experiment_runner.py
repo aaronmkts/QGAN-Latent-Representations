@@ -61,27 +61,35 @@ def test_stage5_commands_use_project_clis_and_checkpoint_wiring() -> None:
     assert auto_pretrain.command[0] == "qgan-latent-pretrain"
     assert "shared/representations@model.autoencoder=autoencoder" in auto_pretrain.command
     assert "pretrain_epochs=5" in auto_pretrain.command
-    assert "device=cpu" in auto_pretrain.command
+    assert "device=gpu" in auto_pretrain.command
     assert "wandb_mode=disabled" in auto_pretrain.command
 
     auto_qgan = by_name["latent_autoencoder_qgan_5ep"]
     assert auto_qgan.command[0] == "qgan-latent-train"
     assert "epochs=5" in auto_qgan.command
+    assert "device=gpu" in auto_qgan.command
     assert any(
-        item == "checkpoints.dir=outputs/experiments/stage5_test_run/stage5-test/latent_qgan/autoencoder/pretrain/checkpoints"
+        item == "checkpoints.dir=outputs/experiments/stage5_test_run/stage5-test/latent_qgan/autoencoder/qgan_train/checkpoints"
         for item in auto_qgan.command
     )
-    assert "checkpoints.autoencoder=autoencoder.ckpt" in auto_qgan.command
+    assert any(
+        item == "checkpoints.autoencoder=outputs/experiments/stage5_test_run/stage5-test/latent_qgan/autoencoder/pretrain/checkpoints/autoencoder.ckpt"
+        for item in auto_qgan.command
+    )
 
     mps_prior = by_name["mps_prior_train_5ep"]
     assert mps_prior.command[0] == "qgan-vqvae-train-prior"
     assert "model.mps_prior.epochs=5" in mps_prior.command
     assert "shared/representations@model.vqvae=spatial_vqvae" in mps_prior.command
+    assert "device=gpu" in mps_prior.command
     assert any(
-        item == "checkpoints.dir=outputs/experiments/stage5_test_run/stage5-test/tensor_prior_vqvae/spatial_vqvae_pretrain/checkpoints"
+        item == "checkpoints.dir=outputs/experiments/stage5_test_run/stage5-test/tensor_prior_vqvae/mps_prior_train/checkpoints"
         for item in mps_prior.command
     )
-    assert "checkpoints.vqvae=spatial_vqvae.ckpt" in mps_prior.command
+    assert any(
+        item == "checkpoints.vqvae=outputs/experiments/stage5_test_run/stage5-test/tensor_prior_vqvae/spatial_vqvae_pretrain/checkpoints/spatial_vqvae.ckpt"
+        for item in mps_prior.command
+    )
 
 
 def test_stage5_summary_and_obsidian_note_are_compact_and_traceable() -> None:
@@ -155,3 +163,63 @@ def test_stage5_main_dry_run_writes_summary_logs_and_obsidian_note(tmp_path) -> 
     note_text = obsidian_note.read_text(encoding="utf-8")
     assert "No VQ-VAE variants are used for latent-QGAN runs" in note_text
     assert "latent_vqvae" not in note_text
+
+
+def test_stage5_commands_default_to_gpu_where_possible_and_keep_train_checkpoints_separate() -> None:
+    plan = build_stage5_plan(run_id="stage5-test", epochs=5)
+    by_name = {run.name: run for run in plan.runs}
+
+    auto_pretrain = by_name["latent_autoencoder_pretrain_5ep"]
+    assert "device=gpu" in auto_pretrain.command
+
+    auto_qgan = by_name["latent_autoencoder_qgan_5ep"]
+    assert "device=gpu" in auto_qgan.command
+    assert any(
+        item == "checkpoints.dir=outputs/experiments/stage5_test_run/stage5-test/latent_qgan/autoencoder/qgan_train/checkpoints"
+        for item in auto_qgan.command
+    )
+    assert any(
+        item == "checkpoints.autoencoder=outputs/experiments/stage5_test_run/stage5-test/latent_qgan/autoencoder/pretrain/checkpoints/autoencoder.ckpt"
+        for item in auto_qgan.command
+    )
+    assert auto_qgan.expected_outputs == (
+        Path("outputs/experiments/stage5_test_run/stage5-test/latent_qgan/autoencoder/qgan_train/checkpoints/qgan_gen.ckpt"),
+        Path("outputs/experiments/stage5_test_run/stage5-test/latent_qgan/autoencoder/qgan_train/checkpoints/qgan_disc.ckpt"),
+    )
+
+    mps_prior = by_name["mps_prior_train_5ep"]
+    assert "device=gpu" in mps_prior.command
+    assert any(
+        item == "checkpoints.dir=outputs/experiments/stage5_test_run/stage5-test/tensor_prior_vqvae/mps_prior_train/checkpoints"
+        for item in mps_prior.command
+    )
+    assert any(
+        item == "checkpoints.vqvae=outputs/experiments/stage5_test_run/stage5-test/tensor_prior_vqvae/spatial_vqvae_pretrain/checkpoints/spatial_vqvae.ckpt"
+        for item in mps_prior.command
+    )
+    assert mps_prior.expected_outputs == (
+        Path("outputs/experiments/stage5_test_run/stage5-test/tensor_prior_vqvae/mps_prior_train/checkpoints/mps_prior.ckpt"),
+    )
+
+
+def test_stage5_main_can_export_obsidian_handoff_for_vps_filing(tmp_path) -> None:
+    output_root = tmp_path / "outputs"
+
+    exit_code = main([
+        "--run-id",
+        "stage5-test",
+        "--epochs",
+        "5",
+        "--output-root",
+        str(output_root),
+        "--dry-run",
+        "--obsidian-handoff",
+    ])
+
+    assert exit_code == 0
+    run_root = output_root / "stage5-test"
+    handoff = run_root / "obsidian_handoff" / "QGAN Latent Representations - Stage 5 Test Run.md"
+    assert handoff.is_file()
+    handoff_text = handoff.read_text(encoding="utf-8")
+    assert "# QGAN Latent Representations - Stage 5 Test Run" in handoff_text
+    assert "stage5-test" in handoff_text
