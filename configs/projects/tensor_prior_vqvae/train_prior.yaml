@@ -1,0 +1,21 @@
+# @package _global_
+defaults:
+  - /shared/representations@model.vqvae: spatial_vqvae
+  - /projects/tensor_prior_vqvae/models@model.mps_prior: mps_prior
+  - /shared/data@data: mnist
+  - _self_
+
+seed: 42
+device: gpu
+smoke_test: false
+wandb_mode: disabled
+log_every: 50
+sample_every: 500
+
+outputs:
+  dir: outputs/tensor_prior_vqvae/train_prior
+
+checkpoints:
+  dir: checkpoints
+  vqvae: spatial_vqvae.ckpt
+  mps_prior: mps_prior.ckpt

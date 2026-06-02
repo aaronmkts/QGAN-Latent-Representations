@@ -1,9 +1,10 @@
+# @package _global_
 defaults:
-  - shared/representations@model.autoencoder: autoencoder
-  - projects/qgan_expectation_values/models@model.quantum_generator: quantum_generator
-  - projects/qgan_expectation_values/models@model.discriminator: discriminator
-  - shared/data@data: mnist
-  - shared/metrics@metrics: default
+  - /shared/representations@model.autoencoder: autoencoder
+  - /projects/qgan_expectation_values/models@model.quantum_generator: quantum_generator
+  - /projects/qgan_expectation_values/models@model.discriminator: discriminator
+  - /shared/data@data: mnist
+  - /shared/metrics@metrics: default
   - _self_
 
 seed: 42
@@ -20,7 +21,7 @@ device: GPU
 wandb_mode: disabled
 
 outputs:
-  dir: outputs/train
+  dir: outputs/qgan_expectation_values/train
 
 checkpoints:
   dir: checkpoints
