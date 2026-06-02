@@ -11,7 +11,11 @@ from qgan_latent.shared.training.pretrain_loop import run_pretrain
 log = logging.getLogger(__name__)
 
 
-@hydra.main(config_path=str(find_config_dir()), config_name="pretrain", version_base="1.3")
+@hydra.main(
+    config_path=str(find_config_dir()),
+    config_name="projects/tensor_prior_vqvae/pretrain",
+    version_base="1.3",
+)
 def main(cfg: DictConfig) -> None:
     log.info("Configs:\n%s", OmegaConf.to_yaml(cfg))
     run_pretrain(cfg)
