@@ -5,7 +5,7 @@ This repository is a research testbed for latent-representation generative model
 - Latent-space QGAN: representation pretraining followed by a latent-space QGAN with a classical discriminator.
 - Tensor-prior VQ-VAE: Spatial VQ-VAE pretraining followed by an MPS Born-machine prior over codebook indices.
 
-Stage 1 is documentation/metadata framing only. Stage 2 may separate Hydra configs into shared and project-specific groups. Do not move Python namespaces or production modules until a later namespace-refactor stage.
+Stage 2 separates Hydra configs into shared and project-specific groups. Do not move Python namespaces or production modules until the later namespace-refactor stage.
 
 ## Structure
 
@@ -15,7 +15,7 @@ Stage 1 is documentation/metadata framing only. Stage 2 may separate Hydra confi
 - `src/qgan_latent/models/` contains representation models, quantum generator code, discriminators, and MPS priors.
 - `src/qgan_latent/training/` contains training loops and smoke-test helpers.
 - `src/qgan_latent/utils/` contains checkpointing, device, image-grid, logging, metrics, path, seed, and train-state helpers.
-- `configs/` contains Hydra configs. Current compatibility config groups live under `configs/model`, `configs/data`, and `configs/metrics`; planned Stage 2 work may split these into shared and project-specific config groups while preserving top-level config names.
+- `configs/` contains Hydra configs. Root configs (`pretrain`, `train`, `train_prior`) are compatibility entrypoints. Shared groups live under `configs/shared/`; project-specific groups live under `configs/projects/qgan_expectation_values/` and `configs/projects/tensor_prior_vqvae/`.
 - `tests/` contains pytest coverage for configs, package imports, model initialization, checkpoints, and smoke modes.
 
 ## Coding Conventions
@@ -44,6 +44,9 @@ Stage 1 is documentation/metadata framing only. Stage 2 may separate Hydra confi
 - Pretrain representation models: `qgan-pretrain`
 - Train the latent-space QGAN workflow: `qgan-train`
 - Train the tensor-prior VQ-VAE workflow: `qgan-train-prior`
+- Compose direct QGAN project configs with names such as `projects/qgan_expectation_values/pretrain` and `projects/qgan_expectation_values/train`.
+- Compose direct tensor-prior project configs with names such as `projects/tensor_prior_vqvae/pretrain` and `projects/tensor_prior_vqvae/train_prior`.
+- Override representation groups with syntax such as `shared/representations@model.autoencoder=autoencoder`.
 
 ## Artifacts
 

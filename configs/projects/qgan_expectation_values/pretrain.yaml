@@ -1,6 +1,7 @@
+# @package _global_
 defaults:
-  - shared/representations@model.autoencoder: spatial_vqvae
-  - shared/data@data: mnist
+  - /shared/representations@model.autoencoder: autoencoder
+  - /shared/data@data: mnist
   - _self_
 
 seed: 42
@@ -15,7 +16,7 @@ device: gpu
 wandb_mode: disabled
 
 outputs:
-  dir: outputs/pretrainautoencoder
+  dir: outputs/qgan_expectation_values/pretrain
 
 checkpoints:
   dir: checkpoints

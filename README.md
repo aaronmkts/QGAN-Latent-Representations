@@ -71,16 +71,16 @@ qgan-pretrain
 Pretrain an autoencoder for the QGAN path:
 
 ```bash
-qgan-pretrain 'model@model.autoencoder=autoencoder'
+qgan-pretrain 'shared/representations@model.autoencoder=autoencoder'
 ```
 
 Other representation configs:
 
 ```bash
-qgan-pretrain 'model@model.autoencoder=vae'
-qgan-pretrain 'model@model.autoencoder=sinkhorn_ae'
-qgan-pretrain 'model@model.autoencoder=vqvae'
-qgan-pretrain 'model@model.autoencoder=spatial_vqvae'
+qgan-pretrain 'shared/representations@model.autoencoder=vae'
+qgan-pretrain 'shared/representations@model.autoencoder=sinkhorn_ae'
+qgan-pretrain 'shared/representations@model.autoencoder=vqvae'
+qgan-pretrain 'shared/representations@model.autoencoder=spatial_vqvae'
 ```
 
 Then train the latent-space QGAN using the configured autoencoder checkpoint path:
@@ -102,7 +102,7 @@ This workflow trains a Spatial VQ-VAE and then trains an MPS Born-machine prior 
 Train the Spatial VQ-VAE:
 
 ```bash
-qgan-pretrain 'model@model.autoencoder=spatial_vqvae'
+qgan-pretrain 'shared/representations@model.autoencoder=spatial_vqvae'
 ```
 
 Train the MPS prior over the Spatial VQ-VAE codebook indices:
@@ -125,6 +125,18 @@ Outputs:
 - `qgan_latent.models.mps_prior`: JAX and optional quimb MPS prior utilities.
 - `qgan_latent.training`: pretraining, QGAN, MPS-prior loops, and smoke helpers.
 - `qgan_latent.utils`: checkpoints, device selection, logging, metrics, paths, seeds, image grids.
+
+## Configuration Layout
+
+Hydra configs are split into shared and project-specific groups while preserving the root compatibility entrypoints `pretrain`, `train`, and `train_prior`.
+
+- `configs/shared/data/`: dataset configs such as MNIST.
+- `configs/shared/metrics/`: reusable metric configs.
+- `configs/shared/representations/`: reusable representation models including AE, VAE, VQ-VAE, and Spatial VQ-VAE.
+- `configs/projects/qgan_expectation_values/`: latent-space QGAN pretraining/training configs plus QGAN-specific generator/discriminator configs.
+- `configs/projects/tensor_prior_vqvae/`: Spatial VQ-VAE plus tensor-prior/MPS configs.
+
+Direct project configs can be composed with Hydra names such as `projects/qgan_expectation_values/train` and `projects/tensor_prior_vqvae/train_prior`. The console scripts continue to use the root compatibility configs by default.
 
 ## Documentation Scope
 

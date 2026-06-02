@@ -1,7 +1,7 @@
 defaults:
-  - model/spatial_vqvae@model.vqvae
-  - model/mps_prior@model.mps_prior
-  - data/mnist
+  - shared/representations@model.vqvae: spatial_vqvae
+  - projects/tensor_prior_vqvae/models@model.mps_prior: mps_prior
+  - shared/data@data: mnist
   - _self_
 
 seed: 42
