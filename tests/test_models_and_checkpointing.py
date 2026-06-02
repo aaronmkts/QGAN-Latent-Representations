@@ -3,18 +3,18 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from qgan_latent.models.compression_methods.autoencoder import (
+from qgan_latent.shared.representations.autoencoder import (
     Autoencoder,
     init_autoencoder_variables_with_shape,
 )
-from qgan_latent.models.compression_methods.spatial_vqvae import (
+from qgan_latent.shared.representations.spatial_vqvae import (
     SpatialVQVAE,
     init_spatial_vqvae_variables,
 )
-from qgan_latent.models.discriminator import Discriminator, init_discriminator_params
-from qgan_latent.models.mps_prior.mps import init_mps_params, mps_nll_loss, mps_sample
-from qgan_latent.models.quantum_generator import build_generator_apply, init_generator_params
-from qgan_latent.utils.checkpointing import load_checkpoint, save_checkpoint
+from qgan_latent.workflows.qgan_expectation_values.models.discriminator import Discriminator, init_discriminator_params
+from qgan_latent.workflows.tensor_prior_vqvae.models.mps_prior.mps import init_mps_params, mps_nll_loss, mps_sample
+from qgan_latent.workflows.qgan_expectation_values.models.quantum_generator import build_generator_apply, init_generator_params
+from qgan_latent.shared.utils.checkpointing import load_checkpoint, save_checkpoint
 
 
 def test_model_initializers_and_checkpoint_round_trip(tmp_path) -> None:

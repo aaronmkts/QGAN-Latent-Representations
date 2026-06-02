@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import random
+import warnings
 
-import numpy as np
-
-
-def set_seed(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
+from qgan_latent.shared.utils.seed import *  # noqa: F401,F403
+warnings.warn(
+    "qgan_latent.utils.seed is deprecated; use qgan_latent.shared.utils.seed instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)

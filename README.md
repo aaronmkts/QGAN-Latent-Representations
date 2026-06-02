@@ -119,12 +119,13 @@ Outputs:
 
 ## Architecture
 
-- `qgan_latent.datamodules`: MNIST download/loading.
-- `qgan_latent.models.compression_methods`: AE, VAE, Sinkhorn AE, VQ-VAE, Spatial VQ-VAE.
-- `qgan_latent.models.quantum_generator`: PennyLane/JAX style-based quantum generator.
-- `qgan_latent.models.mps_prior`: JAX and optional quimb MPS prior utilities.
-- `qgan_latent.training`: pretraining, QGAN, MPS-prior loops, and smoke helpers.
-- `qgan_latent.utils`: checkpoints, device selection, logging, metrics, paths, seeds, image grids.
+- `qgan_latent.shared.datamodules`: MNIST download/loading.
+- `qgan_latent.shared.representations`: AE, VAE, Sinkhorn AE, VQ-VAE, Spatial VQ-VAE.
+- `qgan_latent.shared.training` and `qgan_latent.shared.smoke`: reusable pretraining and smoke-test helpers.
+- `qgan_latent.shared.utils`: checkpoints, device selection, logging, metrics, paths, seeds, image grids.
+- `qgan_latent.workflows.qgan_expectation_values`: latent-space QGAN generator, discriminator, and GAN training loop.
+- `qgan_latent.workflows.tensor_prior_vqvae`: tensor-prior/MPS prior models and training loop.
+- Legacy `qgan_latent.datamodules`, `qgan_latent.models`, `qgan_latent.training`, and `qgan_latent.utils` paths remain as deprecating compatibility wrappers.
 
 ## Configuration Layout
 

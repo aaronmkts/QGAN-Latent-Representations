@@ -6,7 +6,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from qgan_latent.cli._common import find_config_dir
-from qgan_latent.training.pretrain_loop import run_pretrain
+from qgan_latent.shared.training.pretrain_loop import run_pretrain
 
 log = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from qgan_latent.cli._common import configure_cpu_parallelism, find_config_dir
-from qgan_latent.training.gan_loop import run_gan
+from qgan_latent.workflows.qgan_expectation_values.training.gan_loop import run_gan
 
 configure_cpu_parallelism()
 

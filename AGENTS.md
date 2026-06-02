@@ -5,22 +5,22 @@ This repository is a research testbed for latent-representation generative model
 - Latent-space QGAN: representation pretraining followed by a latent-space QGAN with a classical discriminator.
 - Tensor-prior VQ-VAE: Spatial VQ-VAE pretraining followed by an MPS Born-machine prior over codebook indices.
 
-Stage 2 separates Hydra configs into shared and project-specific groups. Do not move Python namespaces or production modules until the later namespace-refactor stage.
+Stage 3 separates Python source namespaces into shared components and workflow-specific packages. Keep legacy import wrappers thin and compatibility-only; new production imports should use canonical Stage 3 namespaces.
 
 ## Structure
 
 - `src/qgan_latent/` is the Python package root.
-- `src/qgan_latent/cli/` contains Hydra command entrypoints.
-- `src/qgan_latent/datamodules/` contains dataset loading code.
-- `src/qgan_latent/models/` contains representation models, quantum generator code, discriminators, and MPS priors.
-- `src/qgan_latent/training/` contains training loops and smoke-test helpers.
-- `src/qgan_latent/utils/` contains checkpointing, device, image-grid, logging, metrics, path, seed, and train-state helpers.
+- `src/qgan_latent/cli/` contains stable Hydra command entrypoints.
+- `src/qgan_latent/shared/` contains reusable datamodules, representation models, pretraining, smoke helpers, and utilities.
+- `src/qgan_latent/workflows/qgan_expectation_values/` contains the latent-space QGAN generator, discriminator, and GAN training loop.
+- `src/qgan_latent/workflows/tensor_prior_vqvae/` contains the tensor-prior/MPS prior models and training loop.
+- `src/qgan_latent/datamodules/`, `src/qgan_latent/models/`, `src/qgan_latent/training/`, and `src/qgan_latent/utils/` are legacy compatibility wrappers. Do not add new implementation logic there.
 - `configs/` contains Hydra configs. Root configs (`pretrain`, `train`, `train_prior`) are compatibility entrypoints. Shared groups live under `configs/shared/`; project-specific groups live under `configs/projects/qgan_expectation_values/` and `configs/projects/tensor_prior_vqvae/`.
 - `tests/` contains pytest coverage for configs, package imports, model initialization, checkpoints, and smoke modes.
 
 ## Coding Conventions
 
-- Use package-qualified imports: `from qgan_latent...`.
+- Use package-qualified imports from canonical Stage 3 namespaces: `qgan_latent.shared...` or `qgan_latent.workflows...`.
 - Do not add `sys.path` mutation to production code or scripts.
 - Keep root scripts (`pretrain.py`, `train.py`, `train_prior.py`) as thin compatibility wrappers around `qgan_latent.cli`.
 - Prefer small helper modules when behavior is shared across training loops.

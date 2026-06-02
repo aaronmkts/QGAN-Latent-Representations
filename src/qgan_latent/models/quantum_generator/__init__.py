@@ -1,10 +1,10 @@
-from .circuits import CircuitConfig, make_style_based_circuit
-from .generator import build_generator_apply, init_generator_params, sample_noise
+from __future__ import annotations
 
-__all__ = [
-    "CircuitConfig",
-    "make_style_based_circuit",
-    "build_generator_apply",
-    "init_generator_params",
-    "sample_noise",
-]
+import warnings
+
+from qgan_latent.workflows.qgan_expectation_values.models.quantum_generator import *  # noqa: F401,F403
+warnings.warn(
+    "qgan_latent.models.quantum_generator.__init__ is deprecated; use qgan_latent.workflows.qgan_expectation_values.models.quantum_generator instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
