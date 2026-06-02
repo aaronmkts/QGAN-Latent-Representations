@@ -6,6 +6,10 @@ import importlib
 def test_public_package_imports() -> None:
     modules = [
         "qgan_latent",
+        "qgan_latent.cli.latent_pretrain",
+        "qgan_latent.cli.latent_train",
+        "qgan_latent.cli.vqvae_pretrain",
+        "qgan_latent.cli.vqvae_train_prior",
         "qgan_latent.shared.datamodules.mnist",
         "qgan_latent.shared.representations.autoencoder",
         "qgan_latent.shared.representations.spatial_vqvae",
@@ -20,9 +24,3 @@ def test_public_package_imports() -> None:
 
     for module in modules:
         importlib.import_module(module)
-
-
-def test_root_wrappers_export_main() -> None:
-    for module_name in ["pretrain", "train", "train_prior"]:
-        module = importlib.import_module(module_name)
-        assert callable(module.main)

@@ -13,7 +13,11 @@ configure_cpu_parallelism()
 log = logging.getLogger(__name__)
 
 
-@hydra.main(config_path=str(find_config_dir()), config_name="train", version_base="1.3")
+@hydra.main(
+    config_path=str(find_config_dir()),
+    config_name="projects/qgan_expectation_values/train",
+    version_base="1.3",
+)
 def main(cfg: DictConfig) -> None:
     log.info("Configs:\n%s", OmegaConf.to_yaml(cfg))
     run_gan(cfg)

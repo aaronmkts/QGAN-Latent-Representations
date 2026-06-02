@@ -147,7 +147,7 @@ def run_mps_prior(cfg) -> dict:
         if not smoke_test:
             raise FileNotFoundError(
                 f"Pretrained Spatial VQ-VAE checkpoint not found at {vqvae_ckpt}. "
-                "Run: python pretrain.py 'model@model.autoencoder=spatial_vqvae'"
+                "Run: qgan-vqvae-pretrain"
             )
     else:
         loaded = load_checkpoint(vqvae_ckpt, {

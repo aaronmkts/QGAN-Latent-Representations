@@ -28,9 +28,10 @@ dependencies = [
 ]
 
 [project.scripts]
-qgan-pretrain = "qgan_latent.cli.pretrain:main"
-qgan-train = "qgan_latent.cli.train:main"
-qgan-train-prior = "qgan_latent.cli.train_prior:main"
+qgan-latent-pretrain = "qgan_latent.cli.latent_pretrain:main"
+qgan-latent-train = "qgan_latent.cli.latent_train:main"
+qgan-vqvae-pretrain = "qgan_latent.cli.vqvae_pretrain:main"
+qgan-vqvae-train-prior = "qgan_latent.cli.vqvae_train_prior:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

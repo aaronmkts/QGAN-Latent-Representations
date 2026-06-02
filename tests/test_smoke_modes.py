@@ -18,7 +18,7 @@ def _compose(name: str, overrides: list[str]):
 def test_pretrain_smoke_mode_runs(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     cfg = _compose(
-        "pretrain",
+        "projects/tensor_prior_vqvae/pretrain",
         [
             "smoke_test=true",
             "device=cpu",
@@ -40,7 +40,7 @@ def test_pretrain_smoke_mode_runs(tmp_path, monkeypatch) -> None:
 def test_gan_smoke_mode_runs_without_pretrained_checkpoint(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     cfg = _compose(
-        "train",
+        "projects/qgan_expectation_values/train",
         [
             "smoke_test=true",
             "device=cpu",
@@ -67,7 +67,7 @@ def test_gan_smoke_mode_runs_without_pretrained_checkpoint(tmp_path, monkeypatch
 def test_mps_prior_smoke_mode_runs_without_pretrained_checkpoint(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     cfg = _compose(
-        "train_prior",
+        "projects/tensor_prior_vqvae/train_prior",
         [
             "smoke_test=true",
             "device=cpu",
