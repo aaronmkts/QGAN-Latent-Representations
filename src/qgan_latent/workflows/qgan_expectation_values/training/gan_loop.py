@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from functools import partial
 from typing import Tuple
 
@@ -225,9 +226,16 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     ae_params = ae_variables["params"]
     ae_batch_stats = ae_variables["batch_stats"]
 
-    # Load Pretrained AE Checkpoint
-    ckpt_dir = get_run_root() / cfg.checkpoints.dir
-    ae_ckpt = ckpt_dir / cfg.checkpoints.autoencoder
+    # Load Pretrained AE Checkpoint. If checkpoints.autoencoder is a path,
+    # interpret it relative to the repository root; otherwise preserve the
+    # historical checkpoints.dir/name behaviour.
+    run_root = get_run_root()
+    ckpt_dir = run_root / cfg.checkpoints.dir
+    autoencoder_path = Path(str(cfg.checkpoints.autoencoder))
+    if autoencoder_path.parent == Path("."):
+        ae_ckpt = ckpt_dir / autoencoder_path
+    else:
+        ae_ckpt = autoencoder_path if autoencoder_path.is_absolute() else run_root / autoencoder_path
     if not ae_ckpt.exists():
         if not smoke_test:
             raise FileNotFoundError("Pretrained Autoencoder checkpoint is required for LaSt-QGAN.")

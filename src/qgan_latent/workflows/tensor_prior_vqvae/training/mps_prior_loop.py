@@ -9,6 +9,7 @@ Stage 2 of the VQ-VAE pipeline:
 
 from __future__ import annotations
 
+from pathlib import Path
 import jax
 import jax.numpy as jnp
 import optax
@@ -141,7 +142,11 @@ def run_mps_prior(cfg) -> dict:
 
     orig_cwd = get_run_root()
     ckpt_dir = orig_cwd / cfg.checkpoints.dir
-    vqvae_ckpt = ckpt_dir / cfg.checkpoints.vqvae
+    vqvae_path = Path(str(cfg.checkpoints.vqvae))
+    if vqvae_path.parent == Path("."):
+        vqvae_ckpt = ckpt_dir / vqvae_path
+    else:
+        vqvae_ckpt = vqvae_path if vqvae_path.is_absolute() else orig_cwd / vqvae_path
 
     if not vqvae_ckpt.exists():
         if not smoke_test:

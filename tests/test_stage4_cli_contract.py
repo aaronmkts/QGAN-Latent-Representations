@@ -16,6 +16,7 @@ EXPECTED_SCRIPTS = {
     "qgan-latent-train": "qgan_latent.cli.latent_train:main",
     "qgan-vqvae-pretrain": "qgan_latent.cli.vqvae_pretrain:main",
     "qgan-vqvae-train-prior": "qgan_latent.cli.vqvae_train_prior:main",
+    "qgan-stage5-test-run": "qgan_latent.cli.stage5_test_run:main",
 }
 REMOVED_SCRIPTS = {"qgan-pretrain", "qgan-train", "qgan-train-prior"}
 REMOVED_CLI_MODULES = {"pretrain.py", "train.py", "train_prior.py"}
