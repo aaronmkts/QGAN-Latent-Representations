@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - train
+  - _self_
+
+outputs:
+  dir: outputs/qgan_expectation_values/cache_latents
+
+cache:
+  overwrite: false

@@ -11,9 +11,11 @@ from flax.training import train_state
 from tqdm import tqdm
 import numpy as np
 from qgan_latent.shared.datamodules.mnist import MNISTDataModule
-from qgan_latent.shared.representations.autoencoder import (
-    Autoencoder,
-    init_autoencoder_variables_with_shape,
+from qgan_latent.shared.representations.runtime import (
+    RepresentationRuntime,
+    build_representation_runtime,
+    init_representation_variables,
+    representation_checkpoint_path,
 )
 from qgan_latent.workflows.qgan_expectation_values.models.discriminator import Discriminator, init_discriminator_params
 from qgan_latent.workflows.qgan_expectation_values.models.quantum_generator import build_generator_apply, init_generator_params, sample_noise
@@ -52,7 +54,7 @@ def _gradient_penalty(
 def make_disc_step(
     discriminator: Discriminator,
     gen_apply,
-    autoencoder: Autoencoder,
+    representation: RepresentationRuntime,
     noise_dim: int,
     lambda_gp: float,
 ):
@@ -61,19 +63,15 @@ def make_disc_step(
     def disc_step(
         disc_state: train_state.TrainState,
         gen_params: dict,
-        ae_params: dict,
-        ae_batch_stats: dict,
+        rep_variables: dict,
         batch_images: jnp.ndarray,
         rng: jax.random.KeyArray,
     ):
         rng, noise_rng, gp_rng = jax.random.split(rng, 3)
 
         # 1. Encode Real Images to Latent Features
-        # We stop gradient because the AE is frozen/pretrained
-        ae_vars = {"params": ae_params, "batch_stats": ae_batch_stats}
-        real_features = autoencoder.apply(
-            ae_vars, batch_images, method=Autoencoder.encode, train=False
-        )
+        # We stop gradient because the representation is frozen/pretrained
+        real_features = representation.encode(rep_variables, batch_images)
         real_features = real_features.reshape((real_features.shape[0], -1))
         real_features = jax.lax.stop_gradient(real_features)
 
@@ -139,9 +137,8 @@ def make_gen_step(
 def _prepare_samples(
     gen_apply,
     gen_params: dict,
-    autoencoder: Autoencoder,
-    ae_params: dict,
-    ae_batch_stats: dict,
+    representation: RepresentationRuntime,
+    rep_variables: dict,
     rng: jax.random.KeyArray,
     batch_size: int,
     noise_dim: int,
@@ -150,10 +147,7 @@ def _prepare_samples(
     noise = sample_noise(rng, batch_size, noise_dim)
     fake_features = gen_apply(gen_params, noise)
 
-    variables = {"params": ae_params, "batch_stats": ae_batch_stats}
-    fake_images = autoencoder.apply(
-        variables, fake_features, method=Autoencoder.decode, train=False
-    )
+    fake_images = representation.decode(rep_variables, fake_features)
     return fake_images
 
 
@@ -198,13 +192,7 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
                          f"must equal 2 * n_qubits ({expected_dim}) for X+Z measurements.")
 
     # --- Model Initialization ---
-    autoencoder = Autoencoder(
-        latent_dim=cfg.model.autoencoder.latent_dim,
-        encoder_channels=cfg.model.autoencoder.encoder_channels,
-        decoder_channels=cfg.model.autoencoder.decoder_channels,
-        mlp_dim=cfg.model.autoencoder.mlp_dim,
-        tanh_latent=cfg.model.autoencoder.tanh_latent,
-    )
+    representation = build_representation_runtime(cfg.model.autoencoder)
 
     disc_model = Discriminator(
         channels=cfg.model.discriminator.channels,
@@ -219,30 +207,22 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     rng = jax.random.PRNGKey(cfg.seed)
     rng, init_rng, gen_rng, disc_rng = jax.random.split(rng, 4)
 
-    # Initialize AE
-    ae_variables = init_autoencoder_variables_with_shape(
-        init_rng, autoencoder, input_shape=(28, 28, 1)
+    # Initialize frozen representation
+    rep_variables = init_representation_variables(
+        representation, init_rng, input_shape=(28, 28, 1)
     )
-    ae_params = ae_variables["params"]
-    ae_batch_stats = ae_variables["batch_stats"]
 
     # Load Pretrained AE Checkpoint. If checkpoints.autoencoder is a path,
     # interpret it relative to the repository root; otherwise preserve the
     # historical checkpoints.dir/name behaviour.
     run_root = get_run_root()
     ckpt_dir = run_root / cfg.checkpoints.dir
-    autoencoder_path = Path(str(cfg.checkpoints.autoencoder))
-    if autoencoder_path.parent == Path("."):
-        ae_ckpt = ckpt_dir / autoencoder_path
-    else:
-        ae_ckpt = autoencoder_path if autoencoder_path.is_absolute() else run_root / autoencoder_path
+    ae_ckpt = representation_checkpoint_path(cfg.model.autoencoder, cfg.checkpoints, run_root)
     if not ae_ckpt.exists():
         if not smoke_test:
-            raise FileNotFoundError("Pretrained Autoencoder checkpoint is required for LaSt-QGAN.")
+            raise FileNotFoundError("Pretrained representation checkpoint is required for LaSt-QGAN.")
     else:
-        loaded = load_checkpoint(ae_ckpt, {"params": ae_params, "batch_stats": ae_batch_stats})
-        ae_params = loaded["params"]
-        ae_batch_stats = loaded["batch_stats"]
+        rep_variables = load_checkpoint(ae_ckpt, rep_variables)
 
     # Initialize Generator
     gen_params = init_generator_params(
@@ -280,7 +260,7 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     disc_step = make_disc_step(
         disc_model,
         gen_apply,
-        autoencoder,
+        representation,
         cfg.model.quantum_generator.noise_dim,
         cfg.lambda_gp,
     )
@@ -317,8 +297,7 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
             disc_state, disc_metrics = disc_step(
                 disc_state,
                 gen_state.params,
-                ae_params,
-                ae_batch_stats,
+                rep_variables,
                 batch_images,
                 step_rng,
             )
@@ -346,9 +325,8 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
                 samples = _prepare_samples(
                     gen_apply,
                     gen_state.params,
-                    autoencoder,
-                    ae_params,
-                    ae_batch_stats,
+                    representation,
+                    rep_variables,
                     sample_rng,
                     batch_size=sample_batch_size,
                     noise_dim=cfg.model.quantum_generator.noise_dim,
@@ -371,7 +349,7 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
             metric_rng, batch_rng = jax.random.split(metric_rng)
 
             batch_fake = _prepare_samples(
-                gen_apply, gen_state.params, autoencoder, ae_params, ae_batch_stats,
+                gen_apply, gen_state.params, representation, rep_variables,
                 batch_rng, batch_size=current_bs, noise_dim=cfg.model.quantum_generator.noise_dim
             )
             fake_images_cpu[start_idx:end_idx] = np.array(batch_fake)

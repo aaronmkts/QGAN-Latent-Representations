@@ -17,6 +17,7 @@ EXPECTED_SCRIPTS = {
     "qgan-vqvae-pretrain": "qgan_latent.cli.vqvae_pretrain:main",
     "qgan-vqvae-train-prior": "qgan_latent.cli.vqvae_train_prior:main",
     "qgan-stage5-test-run": "qgan_latent.cli.stage5_test_run:main",
+    "qgan-cache-latents": "qgan_latent.cli.cache_latents:main",
 }
 REMOVED_SCRIPTS = {"qgan-pretrain", "qgan-train", "qgan-train-prior"}
 REMOVED_CLI_MODULES = {"pretrain.py", "train.py", "train_prior.py"}
@@ -56,6 +57,7 @@ def test_stage4_cli_modules_are_explicit_and_legacy_modules_removed() -> None:
         "latent_train.py",
         "vqvae_pretrain.py",
         "vqvae_train_prior.py",
+        "cache_latents.py",
     ]:
         assert (cli_dir / module_name).is_file()
     for module_name in REMOVED_CLI_MODULES:
@@ -68,6 +70,7 @@ def test_stage4_cli_modules_select_project_specific_configs() -> None:
     assert _hydra_config_name(cli_dir / "latent_train.py") == "projects/qgan_expectation_values/train"
     assert _hydra_config_name(cli_dir / "vqvae_pretrain.py") == "projects/tensor_prior_vqvae/pretrain"
     assert _hydra_config_name(cli_dir / "vqvae_train_prior.py") == "projects/tensor_prior_vqvae/train_prior"
+    assert _hydra_config_name(cli_dir / "cache_latents.py") == "projects/qgan_expectation_values/cache_latents"
 
 
 def test_stage4_root_compatibility_scripts_removed() -> None:

@@ -33,6 +33,7 @@ qgan-latent-train = "qgan_latent.cli.latent_train:main"
 qgan-vqvae-pretrain = "qgan_latent.cli.vqvae_pretrain:main"
 qgan-vqvae-train-prior = "qgan_latent.cli.vqvae_train_prior:main"
 qgan-stage5-test-run = "qgan_latent.cli.stage5_test_run:main"
+qgan-cache-latents = "qgan_latent.cli.cache_latents:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
