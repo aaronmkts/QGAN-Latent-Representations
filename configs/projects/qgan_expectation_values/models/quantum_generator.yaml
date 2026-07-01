@@ -4,3 +4,6 @@ noise_dim: 10
 observable_bank:
   name: fixed_pauli
   paulis: [X, Z]
+  # Used by two_body_pauli / mixed_pauli banks.
+  two_body_paulis: [XX, ZZ]
+  topology: line
