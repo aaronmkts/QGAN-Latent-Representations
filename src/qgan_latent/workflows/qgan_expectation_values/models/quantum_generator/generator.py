@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 from typing import Callable
 from .circuits import CircuitConfig, make_style_based_circuit
+from .observables import FixedPauliBank
 
 # ... init_generator_params remains the same ...
 def init_generator_params(rng, n_qubits: int, depth: int, noise_dim: int) -> dict:
@@ -25,10 +26,17 @@ def init_generator_params(rng, n_qubits: int, depth: int, noise_dim: int) -> dic
 def build_generator_apply(
     n_qubits: int,
     depth: int,
+    observable_bank: FixedPauliBank | None = None,
 ) -> Callable[[dict, jnp.ndarray], jnp.ndarray]:
 
     # 1. Create the circuit (single sample version)
-    circuit = make_style_based_circuit(CircuitConfig(n_qubits=n_qubits, depth=depth))
+    circuit = make_style_based_circuit(
+        CircuitConfig(
+            n_qubits=n_qubits,
+            depth=depth,
+            observable_bank=observable_bank or FixedPauliBank(n_qubits),
+        )
+    )
 
     # 2. Vmap it immediately to handle batches
     # in_axes=(0,) means "vectorize over the 0-th dimension of the input arguments"
