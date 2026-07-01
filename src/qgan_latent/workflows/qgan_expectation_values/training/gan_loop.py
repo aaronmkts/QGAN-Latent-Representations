@@ -40,6 +40,11 @@ from qgan_latent.workflows.qgan_expectation_values.training.diagnostics import (
     compute_evs_diagnostics,
     evs_scalar_metrics,
 )
+from qgan_latent.workflows.qgan_expectation_values.training.registry import RunRegistry
+
+
+def _tree_parameter_count(params: dict) -> int:
+    return int(sum(np.asarray(leaf).size for leaf in jax.tree_util.tree_leaves(params)))
 
 def _gradient_penalty(
     discriminator: Discriminator,
@@ -298,11 +303,34 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     validation_metric_logger = EpochMetricLogger(
         output_dir / "metrics.csv", output_dir / "metrics.json"
     )
-    (output_dir / "observable_bank_metadata.json").write_text(
-        json.dumps(observable_bank.metadata(), indent=2),
+    observable_bank_metadata = observable_bank.metadata()
+    observable_bank_metadata_path = output_dir / "observable_bank_metadata.json"
+    observable_bank_metadata_path.write_text(
+        json.dumps(observable_bank_metadata, indent=2),
         encoding="utf-8",
     )
-    evs_diagnostics_writer = EvsDiagnosticsWriter(output_dir / "evs_diagnostics.json")
+    metrics_path = output_dir / "metrics.json"
+    diagnostics_path = output_dir / "evs_diagnostics.json"
+    evs_diagnostics_writer = EvsDiagnosticsWriter(diagnostics_path)
+    resource_counts = {
+        "n_qubits": int(cfg.model.quantum_generator.n_qubits),
+        "circuit_depth": int(cfg.model.quantum_generator.depth),
+        "noise_dim": int(cfg.model.quantum_generator.noise_dim),
+        "observable_bank_output_dim": int(expected_dim),
+        "trainable_quantum_parameters": _tree_parameter_count(gen_params),
+        "discriminator_trainable_parameters": _tree_parameter_count(disc_params),
+        "train_images": int(n_samples),
+        "epochs": int(epochs),
+        "batch_size": int(batch_size),
+        "steps_per_epoch": int(steps_per_epoch),
+        "n_critic": int(cfg.n_critic),
+        "gen_lr": float(cfg.gen_lr),
+        "disc_lr": float(cfg.disc_lr),
+        "lambda_gp": float(cfg.lambda_gp),
+    }
+    registry = RunRegistry(output_dir, workflow="qgan_expectation_values")
+    registry.start(cfg, observable_bank_metadata, resource_counts)
+    sample_paths: list[Path] = []
 
     # --- Epoch-Based Training Loop ---
     global_step = 0
@@ -362,6 +390,7 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
                 )
                 sample_path = output_dir / f"samples_step_{global_step:06d}.png"
                 save_image_grid(samples, sample_path, nrow=8)
+                sample_paths.append(sample_path)
                 log_images(run, {"train/samples": samples}, step=global_step)
 
             global_step += 1
@@ -416,6 +445,7 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
             )
             eval_sample_path = output_dir / f"samples_epoch_{epoch + 1:04d}.png"
             save_image_grid(eval_samples, eval_sample_path, nrow=8)
+            sample_paths.append(eval_sample_path)
             log_images(run, {"eval/samples": eval_samples}, step=global_step)
 
         log_str = f"Epoch {epoch} Metrics - " + ", ".join([f"{k.split('/')[-1]}: {v:.4f}" for k,v in results.items()])
@@ -426,8 +456,17 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
 
     epoch_bar.close()
 
-    save_checkpoint(ckpt_dir / cfg.checkpoints.generator, gen_state.params)
-    save_checkpoint(ckpt_dir / cfg.checkpoints.discriminator, disc_state.params)
+    gen_ckpt = ckpt_dir / cfg.checkpoints.generator
+    disc_ckpt = ckpt_dir / cfg.checkpoints.discriminator
+    save_checkpoint(gen_ckpt, gen_state.params)
+    save_checkpoint(disc_ckpt, disc_state.params)
+    registry.finalize(
+        metrics_path=metrics_path,
+        diagnostics_path=diagnostics_path,
+        observable_bank_metadata_path=observable_bank_metadata_path,
+        sample_grid_paths=sample_paths,
+        checkpoint_paths={"generator": gen_ckpt, "discriminator": disc_ckpt},
+    )
 
     if run is not None:
         run.finish()

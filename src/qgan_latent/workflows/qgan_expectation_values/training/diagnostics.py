@@ -61,6 +61,11 @@ def evs_scalar_metrics(diagnostics: Mapping[str, Any]) -> dict[str, float]:
     return {f"evs/{key}": float(diagnostics[key]) for key in _SCALAR_KEYS}
 
 
+def parseval_norm_from_diagnostics(diagnostics: Mapping[str, Any]) -> float:
+    """Return the aggregate EVS Parseval norm squared for comparison metrics."""
+
+    return float(diagnostics["total_parseval_norm_sq"])
+
 class EvsDiagnosticsWriter:
     """Append per-evaluation EVS diagnostics records to JSON."""
 
