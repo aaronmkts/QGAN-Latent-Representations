@@ -14,6 +14,7 @@ SRC = ROOT / "src" / "qgan_latent"
 EXPECTED_SCRIPTS = {
     "qgan-latent-pretrain": "qgan_latent.cli.latent_pretrain:main",
     "qgan-latent-train": "qgan_latent.cli.latent_train:main",
+    "qgan-latent-train-surrogate": "qgan_latent.cli.latent_train_surrogate:main",
     "qgan-vqvae-pretrain": "qgan_latent.cli.vqvae_pretrain:main",
     "qgan-vqvae-train-prior": "qgan_latent.cli.vqvae_train_prior:main",
     "qgan-stage5-test-run": "qgan_latent.cli.stage5_test_run:main",
@@ -55,6 +56,7 @@ def test_stage4_cli_modules_are_explicit_and_legacy_modules_removed() -> None:
     for module_name in [
         "latent_pretrain.py",
         "latent_train.py",
+        "latent_train_surrogate.py",
         "vqvae_pretrain.py",
         "vqvae_train_prior.py",
         "cache_latents.py",
@@ -68,6 +70,7 @@ def test_stage4_cli_modules_select_project_specific_configs() -> None:
     cli_dir = SRC / "cli"
     assert _hydra_config_name(cli_dir / "latent_pretrain.py") == "projects/qgan_expectation_values/pretrain"
     assert _hydra_config_name(cli_dir / "latent_train.py") == "projects/qgan_expectation_values/train"
+    assert _hydra_config_name(cli_dir / "latent_train_surrogate.py") == "projects/qgan_expectation_values/train"
     assert _hydra_config_name(cli_dir / "vqvae_pretrain.py") == "projects/tensor_prior_vqvae/pretrain"
     assert _hydra_config_name(cli_dir / "vqvae_train_prior.py") == "projects/tensor_prior_vqvae/train_prior"
     assert _hydra_config_name(cli_dir / "cache_latents.py") == "projects/qgan_expectation_values/cache_latents"

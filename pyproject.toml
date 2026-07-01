@@ -30,6 +30,7 @@ dependencies = [
 [project.scripts]
 qgan-latent-pretrain = "qgan_latent.cli.latent_pretrain:main"
 qgan-latent-train = "qgan_latent.cli.latent_train:main"
+qgan-latent-train-surrogate = "qgan_latent.cli.latent_train_surrogate:main"
 qgan-vqvae-pretrain = "qgan_latent.cli.vqvae_pretrain:main"
 qgan-vqvae-train-prior = "qgan_latent.cli.vqvae_train_prior:main"
 qgan-stage5-test-run = "qgan_latent.cli.stage5_test_run:main"

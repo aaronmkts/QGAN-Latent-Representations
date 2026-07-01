@@ -90,6 +90,16 @@ def test_gan_smoke_mode_runs_without_pretrained_checkpoint(tmp_path, monkeypatch
     assert len(diagnostics_records) == 1
     assert diagnostics_records[0]["epoch"] == 0
     assert "parseval_norm_sq" in diagnostics_records[0]
+    run_record_path = tmp_path / "outputs" / "train_smoke" / "run_record.json"
+    assert run_record_path.exists()
+    run_record = json.loads(run_record_path.read_text(encoding="utf-8"))
+    assert run_record["status"] == "completed"
+    assert run_record["workflow"] == "qgan_expectation_values"
+    assert run_record["git_commit"]
+    assert Path(run_record["metrics_path"]).exists()
+    assert Path(run_record["diagnostics_path"]).exists()
+    assert Path(run_record["observable_bank_metadata_path"]).exists()
+    assert all(Path(path).exists() for path in run_record["sample_grid_paths"])
 
 
 def test_mps_prior_smoke_mode_runs_without_pretrained_checkpoint(tmp_path, monkeypatch) -> None:

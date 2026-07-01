@@ -30,6 +30,12 @@ checkpoints:
   discriminator: qgan_disc.ckpt
   autoencoder: autoencoder.ckpt
 
+surrogate:
+  enabled: false
+  rff_dim: auto
+  sigma: 1.0
+  hidden_dim: 64
+
 wandb:
   project: qgan-latent
   entity: null
