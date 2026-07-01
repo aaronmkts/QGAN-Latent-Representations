@@ -13,7 +13,11 @@ from qgan_latent.shared.representations.spatial_vqvae import (
 )
 from qgan_latent.workflows.qgan_expectation_values.models.discriminator import Discriminator, init_discriminator_params
 from qgan_latent.workflows.tensor_prior_vqvae.models.mps_prior.mps import init_mps_params, mps_nll_loss, mps_sample
-from qgan_latent.workflows.qgan_expectation_values.models.quantum_generator import build_generator_apply, init_generator_params
+from qgan_latent.workflows.qgan_expectation_values.models.quantum_generator import (
+    FixedPauliBank,
+    build_generator_apply,
+    init_generator_params,
+)
 from qgan_latent.shared.utils.checkpointing import load_checkpoint, save_checkpoint
 
 
@@ -56,6 +60,11 @@ def test_quantum_generator_and_mps_shapes() -> None:
     gen_apply = build_generator_apply(n_qubits=2, depth=1)
     fake_features = gen_apply(gen_params, jnp.zeros((2, 2)))
     assert fake_features.shape == (2, 4)
+
+    x_bank = FixedPauliBank(n_qubits=2, paulis=("X",))
+    x_gen_apply = build_generator_apply(n_qubits=2, depth=1, observable_bank=x_bank)
+    x_fake_features = x_gen_apply(gen_params, jnp.zeros((2, 2)))
+    assert x_fake_features.shape == (2, 2)
 
     mps_params = init_mps_params(rng, n_sites=3, phys_dim=2, bond_dim=2)
     batch = jnp.zeros((2, 3), dtype=jnp.int32)

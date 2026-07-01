@@ -68,6 +68,8 @@ def test_project_qgan_configs_compose_directly() -> None:
     assert pretrain_cfg.model.autoencoder.name == "autoencoder"
     assert train_cfg.model.autoencoder.name == "autoencoder"
     assert train_cfg.model.quantum_generator.n_qubits == 10
+    assert train_cfg.model.quantum_generator.observable_bank.name == "fixed_pauli"
+    assert list(train_cfg.model.quantum_generator.observable_bank.paulis) == ["X", "Z"]
     assert train_cfg.model.discriminator.channels == [32, 64]
     assert train_cfg.gen_lr == 0.001
     assert train_cfg.disc_lr == 0.001

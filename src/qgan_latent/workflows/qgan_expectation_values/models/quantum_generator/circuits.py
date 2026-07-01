@@ -6,10 +6,19 @@ from typing import Callable, List
 import jax.numpy as jnp
 import pennylane as qml
 
+from .observables import FixedPauliBank
+
 @dataclass(frozen=True)
 class CircuitConfig:
     n_qubits: int
     depth: int
+    observable_bank: FixedPauliBank | None = None
+
+    def __post_init__(self) -> None:
+        if self.observable_bank is None:
+            object.__setattr__(self, "observable_bank", FixedPauliBank(self.n_qubits))
+        elif self.observable_bank.n_qubits != self.n_qubits:
+            object.__setattr__(self, "observable_bank", FixedPauliBank(self.n_qubits, self.observable_bank.paulis))
 
 def make_style_based_circuit(config: CircuitConfig) -> Callable:
     """
@@ -32,8 +41,7 @@ def make_style_based_circuit(config: CircuitConfig) -> Callable:
             for i in range(config.n_qubits - 1):
                 qml.CNOT(wires=[i, i + 1])
 
-        # Return measurements
-        return [qml.expval(qml.PauliX(i)) for i in range(config.n_qubits)] + \
-               [qml.expval(qml.PauliZ(i)) for i in range(config.n_qubits)]
+        # Return configured observable-bank measurements.
+        return config.observable_bank.measurements()
 
     return circuit

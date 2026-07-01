@@ -1,4 +1,6 @@
 n_qubits: 10
 depth: 4
 noise_dim: 10
-latent_dim: 20
+observable_bank:
+  name: fixed_pauli
+  paulis: [X, Z]

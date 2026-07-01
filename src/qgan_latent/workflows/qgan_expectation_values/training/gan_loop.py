@@ -18,7 +18,12 @@ from qgan_latent.shared.representations.runtime import (
     representation_checkpoint_path,
 )
 from qgan_latent.workflows.qgan_expectation_values.models.discriminator import Discriminator, init_discriminator_params
-from qgan_latent.workflows.qgan_expectation_values.models.quantum_generator import build_generator_apply, init_generator_params, sample_noise
+from qgan_latent.workflows.qgan_expectation_values.models.quantum_generator import (
+    build_generator_apply,
+    build_observable_bank,
+    init_generator_params,
+    sample_noise,
+)
 from qgan_latent.shared.utils.checkpointing import load_checkpoint, save_checkpoint
 from qgan_latent.shared.utils.image_grid import save_image_grid
 from qgan_latent.shared.utils.logging import log_images, log_metrics, setup_wandb
@@ -187,11 +192,18 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     eval_epochs = 1 if smoke_test else int(getattr(cfg, "eval_epochs", 10))
     sample_batch_size = 4 if smoke_test else 64
 
-    # --- Verification of Paper Constraints ---
-    expected_dim = 2 * cfg.model.quantum_generator.n_qubits
+    # --- Verification of observable-bank output contract ---
+    observable_bank = build_observable_bank(
+        getattr(cfg.model.quantum_generator, "observable_bank", None),
+        n_qubits=cfg.model.quantum_generator.n_qubits,
+    )
+    expected_dim = observable_bank.output_dim
     if cfg.model.autoencoder.latent_dim != expected_dim:
-        raise ValueError(f"Paper Logic Error: Autoencoder latent dim ({cfg.model.autoencoder.latent_dim}) "
-                         f"must equal 2 * n_qubits ({expected_dim}) for X+Z measurements.")
+        raise ValueError(
+            f"Generator/representation shape mismatch: autoencoder latent dim "
+            f"({cfg.model.autoencoder.latent_dim}) must equal observable_bank.output_dim "
+            f"({expected_dim}) for {observable_bank.paulis} measurements."
+        )
 
     # --- Model Initialization ---
     representation = build_representation_runtime(cfg.model.autoencoder)
@@ -244,6 +256,7 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     gen_apply = build_generator_apply(
         n_qubits=cfg.model.quantum_generator.n_qubits,
         depth=cfg.model.quantum_generator.depth,
+        observable_bank=observable_bank,
     )
 
     # --- Train States ---
