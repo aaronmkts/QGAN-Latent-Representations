@@ -15,6 +15,7 @@ gen_lr: 1e-3
 disc_lr: 1e-3
 lambda_gp: 10.0
 sample_every: 200
+eval_epochs: 10
 log_every: 50
 smoke_test: false
 device: GPU

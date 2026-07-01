@@ -23,6 +23,7 @@ from qgan_latent.shared.utils.checkpointing import load_checkpoint, save_checkpo
 from qgan_latent.shared.utils.image_grid import save_image_grid
 from qgan_latent.shared.utils.logging import log_images, log_metrics, setup_wandb
 from qgan_latent.shared.utils.device import select_device
+from qgan_latent.shared.utils.file_logging import EpochMetricLogger
 from qgan_latent.shared.utils.seed import set_seed
 from qgan_latent.shared.utils.train_state import TrainStateWithBatchStats
 from qgan_latent.shared.utils.metrics_wrapper import MetricsManager
@@ -183,6 +184,7 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     epochs = 1 if smoke_test else int(cfg.epochs)
     log_every = 1 if smoke_test else int(cfg.log_every)
     sample_every = 1 if smoke_test else int(cfg.sample_every)
+    eval_epochs = 1 if smoke_test else int(getattr(cfg, "eval_epochs", 10))
     sample_batch_size = 4 if smoke_test else 64
 
     # --- Verification of Paper Constraints ---
@@ -274,6 +276,9 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     orig_cwd = get_run_root()
     output_dir = orig_cwd / cfg.outputs.dir
     output_dir.mkdir(parents=True, exist_ok=True)
+    validation_metric_logger = EpochMetricLogger(
+        output_dir / "metrics.csv", output_dir / "metrics.json"
+    )
 
     # --- Epoch-Based Training Loop ---
     global_step = 0
@@ -361,8 +366,23 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
         log_str = f"Epoch {epoch} Metrics - " + ", ".join([f"{k.split('/')[-1]}: {v:.4f}" for k,v in results.items()])
         print(log_str)
         log_metrics(run, results, step=global_step)
+        validation_metric_logger.log(epoch=epoch, step=global_step, metrics=results)
         metrics_manager.reset()
 
+        if (epoch + 1) % eval_epochs == 0:
+            rng, eval_rng = jax.random.split(rng)
+            eval_samples = _prepare_samples(
+                gen_apply,
+                gen_state.params,
+                representation,
+                rep_variables,
+                eval_rng,
+                batch_size=sample_batch_size,
+                noise_dim=cfg.model.quantum_generator.noise_dim,
+            )
+            eval_sample_path = output_dir / f"samples_epoch_{epoch + 1:04d}.png"
+            save_image_grid(eval_samples, eval_sample_path, nrow=8)
+            log_images(run, {"eval/samples": eval_samples}, step=global_step)
 
     epoch_bar.close()
 
