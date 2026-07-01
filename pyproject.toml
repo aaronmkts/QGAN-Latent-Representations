@@ -35,6 +35,8 @@ qgan-vqvae-pretrain = "qgan_latent.cli.vqvae_pretrain:main"
 qgan-vqvae-train-prior = "qgan_latent.cli.vqvae_train_prior:main"
 qgan-stage5-test-run = "qgan_latent.cli.stage5_test_run:main"
 qgan-cache-latents = "qgan_latent.cli.cache_latents:main"
+qgan-stage8-sweep = "qgan_latent.cli.stage8_sweep:main"
+qgan-stage8-aggregate = "qgan_latent.cli.stage8_aggregate:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
