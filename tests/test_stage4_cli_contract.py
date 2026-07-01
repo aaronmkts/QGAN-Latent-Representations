@@ -19,6 +19,8 @@ EXPECTED_SCRIPTS = {
     "qgan-vqvae-train-prior": "qgan_latent.cli.vqvae_train_prior:main",
     "qgan-stage5-test-run": "qgan_latent.cli.stage5_test_run:main",
     "qgan-cache-latents": "qgan_latent.cli.cache_latents:main",
+    "qgan-stage8-sweep": "qgan_latent.cli.stage8_sweep:main",
+    "qgan-stage8-aggregate": "qgan_latent.cli.stage8_aggregate:main",
 }
 REMOVED_SCRIPTS = {"qgan-pretrain", "qgan-train", "qgan-train-prior"}
 REMOVED_CLI_MODULES = {"pretrain.py", "train.py", "train_prior.py"}
@@ -60,6 +62,8 @@ def test_stage4_cli_modules_are_explicit_and_legacy_modules_removed() -> None:
         "vqvae_pretrain.py",
         "vqvae_train_prior.py",
         "cache_latents.py",
+        "stage8_sweep.py",
+        "stage8_aggregate.py",
     ]:
         assert (cli_dir / module_name).is_file()
     for module_name in REMOVED_CLI_MODULES:
