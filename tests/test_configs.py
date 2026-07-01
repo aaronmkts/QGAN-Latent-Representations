@@ -70,10 +70,30 @@ def test_project_qgan_configs_compose_directly() -> None:
     assert train_cfg.model.quantum_generator.n_qubits == 10
     assert train_cfg.model.quantum_generator.observable_bank.name == "fixed_pauli"
     assert list(train_cfg.model.quantum_generator.observable_bank.paulis) == ["X", "Z"]
+    assert list(train_cfg.model.quantum_generator.observable_bank.two_body_paulis) == ["XX", "ZZ"]
+    assert train_cfg.model.quantum_generator.observable_bank.topology == "line"
     assert train_cfg.model.discriminator.channels == [32, 64]
     assert train_cfg.gen_lr == 0.001
     assert train_cfg.disc_lr == 0.001
     assert train_cfg.wandb_mode == "disabled"
+
+
+def test_quantum_generator_config_optional_observable_bank_keys_parse() -> None:
+    train_cfg = _compose(
+        "projects/qgan_expectation_values/train",
+        overrides=[
+            "model.quantum_generator.observable_bank.name=mixed_pauli",
+            "model.quantum_generator.observable_bank.paulis=[X,Y,Z]",
+            "model.quantum_generator.observable_bank.two_body_paulis=[XX,ZZ]",
+            "model.quantum_generator.observable_bank.topology=line",
+        ],
+    )
+
+    bank_cfg = train_cfg.model.quantum_generator.observable_bank
+    assert bank_cfg.name == "mixed_pauli"
+    assert list(bank_cfg.paulis) == ["X", "Y", "Z"]
+    assert list(bank_cfg.two_body_paulis) == ["XX", "ZZ"]
+    assert bank_cfg.topology == "line"
 
 
 def test_project_tensor_prior_configs_compose_directly() -> None:

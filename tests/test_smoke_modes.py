@@ -78,6 +78,18 @@ def test_gan_smoke_mode_runs_without_pretrained_checkpoint(tmp_path, monkeypatch
     assert len(records) == 1
     assert records[0]["epoch"] == 0
     assert (tmp_path / "outputs" / "train_smoke" / "samples_epoch_0001.png").exists()
+    assert any("evs/total_parseval_norm_sq" in record for record in records)
+    metadata_path = tmp_path / "outputs" / "train_smoke" / "observable_bank_metadata.json"
+    assert metadata_path.exists()
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["name"] == "fixed_pauli"
+    assert metadata["output_dim"] == 4
+    diagnostics_path = tmp_path / "outputs" / "train_smoke" / "evs_diagnostics.json"
+    assert diagnostics_path.exists()
+    diagnostics_records = json.loads(diagnostics_path.read_text(encoding="utf-8"))
+    assert len(diagnostics_records) == 1
+    assert diagnostics_records[0]["epoch"] == 0
+    assert "parseval_norm_sq" in diagnostics_records[0]
 
 
 def test_mps_prior_smoke_mode_runs_without_pretrained_checkpoint(tmp_path, monkeypatch) -> None:

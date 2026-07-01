@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from functools import partial
 from typing import Tuple
@@ -34,6 +35,11 @@ from qgan_latent.shared.utils.train_state import TrainStateWithBatchStats
 from qgan_latent.shared.utils.metrics_wrapper import MetricsManager
 from qgan_latent.shared.smoke import synthetic_mnist_images
 from qgan_latent.shared.utils.paths import get_run_root
+from qgan_latent.workflows.qgan_expectation_values.training.diagnostics import (
+    EvsDiagnosticsWriter,
+    compute_evs_diagnostics,
+    evs_scalar_metrics,
+)
 
 def _gradient_penalty(
     discriminator: Discriminator,
@@ -202,7 +208,7 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
         raise ValueError(
             f"Generator/representation shape mismatch: autoencoder latent dim "
             f"({cfg.model.autoencoder.latent_dim}) must equal observable_bank.output_dim "
-            f"({expected_dim}) for {observable_bank.paulis} measurements."
+            f"({expected_dim}) for {observable_bank.metadata()['name']} measurements."
         )
 
     # --- Model Initialization ---
@@ -292,6 +298,11 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
     validation_metric_logger = EpochMetricLogger(
         output_dir / "metrics.csv", output_dir / "metrics.json"
     )
+    (output_dir / "observable_bank_metadata.json").write_text(
+        json.dumps(observable_bank.metadata(), indent=2),
+        encoding="utf-8",
+    )
+    evs_diagnostics_writer = EvsDiagnosticsWriter(output_dir / "evs_diagnostics.json")
 
     # --- Epoch-Based Training Loop ---
     global_step = 0
@@ -376,14 +387,24 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
 
         metrics_manager.update(fake_images_cpu)
         results = metrics_manager.compute()
-        log_str = f"Epoch {epoch} Metrics - " + ", ".join([f"{k.split('/')[-1]}: {v:.4f}" for k,v in results.items()])
-        print(log_str)
-        log_metrics(run, results, step=global_step)
-        validation_metric_logger.log(epoch=epoch, step=global_step, metrics=results)
-        metrics_manager.reset()
 
         if (epoch + 1) % eval_epochs == 0:
-            rng, eval_rng = jax.random.split(rng)
+            rng, evs_rng, eval_rng = jax.random.split(rng, 3)
+            evs_noise = sample_noise(
+                evs_rng,
+                sample_batch_size,
+                cfg.model.quantum_generator.noise_dim,
+            )
+            evs_expectations = gen_apply(gen_state.params, evs_noise)
+            evs_diagnostics = compute_evs_diagnostics(np.array(evs_expectations))
+            evs_metrics = evs_scalar_metrics(evs_diagnostics)
+            results = {**results, **evs_metrics}
+            evs_diagnostics_writer.log(
+                epoch=epoch,
+                step=global_step,
+                diagnostics=evs_diagnostics,
+            )
+
             eval_samples = _prepare_samples(
                 gen_apply,
                 gen_state.params,
@@ -396,6 +417,12 @@ def run_gan(cfg) -> Tuple[dict, train_state.TrainState]:
             eval_sample_path = output_dir / f"samples_epoch_{epoch + 1:04d}.png"
             save_image_grid(eval_samples, eval_sample_path, nrow=8)
             log_images(run, {"eval/samples": eval_samples}, step=global_step)
+
+        log_str = f"Epoch {epoch} Metrics - " + ", ".join([f"{k.split('/')[-1]}: {v:.4f}" for k,v in results.items()])
+        print(log_str)
+        log_metrics(run, results, step=global_step)
+        validation_metric_logger.log(epoch=epoch, step=global_step, metrics=results)
+        metrics_manager.reset()
 
     epoch_bar.close()
 

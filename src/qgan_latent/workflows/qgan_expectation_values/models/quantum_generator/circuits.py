@@ -6,19 +6,22 @@ from typing import Callable, List
 import jax.numpy as jnp
 import pennylane as qml
 
-from .observables import FixedPauliBank
+from .observables import FixedPauliBank, ObservableBank
 
 @dataclass(frozen=True)
 class CircuitConfig:
     n_qubits: int
     depth: int
-    observable_bank: FixedPauliBank | None = None
+    observable_bank: ObservableBank | None = None
 
     def __post_init__(self) -> None:
         if self.observable_bank is None:
             object.__setattr__(self, "observable_bank", FixedPauliBank(self.n_qubits))
         elif self.observable_bank.n_qubits != self.n_qubits:
-            object.__setattr__(self, "observable_bank", FixedPauliBank(self.n_qubits, self.observable_bank.paulis))
+            raise ValueError(
+                f"observable_bank.n_qubits ({self.observable_bank.n_qubits}) must match "
+                f"CircuitConfig.n_qubits ({self.n_qubits})."
+            )
 
 def make_style_based_circuit(config: CircuitConfig) -> Callable:
     """
