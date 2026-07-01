@@ -21,6 +21,7 @@ from qgan_latent.shared.utils.checkpointing import save_checkpoint
 from qgan_latent.shared.utils.image_grid import save_image_grid
 from qgan_latent.shared.utils.logging import log_images, log_metrics, setup_wandb
 from qgan_latent.shared.utils.device import select_device
+from qgan_latent.shared.utils.file_logging import EpochMetricLogger
 from qgan_latent.shared.utils.seed import set_seed
 from qgan_latent.shared.smoke import synthetic_mnist_images
 from qgan_latent.shared.utils.paths import get_run_root
@@ -445,10 +446,17 @@ def run_pretrain(cfg) -> Tuple[dict, TrainStateWithBatchStats]:
     orig_cwd = get_run_root()
     output_dir = orig_cwd / cfg.outputs.dir
     output_dir.mkdir(parents=True, exist_ok=True)
+    reconstruction_metric_logger = EpochMetricLogger(
+        output_dir / "reconstruction_metrics.csv",
+        output_dir / "reconstruction_metrics.json",
+    )
 
     global_step = 0
     epoch_bar = tqdm(range(pretrain_epochs), desc="Pretrain epochs")
     for epoch in epoch_bar:
+        epoch_metric_totals: dict[str, float] = {}
+        epoch_metric_count = 0
+
         rng, perm_rng = jax.random.split(rng)
         perms = jax.random.permutation(perm_rng, n_samples)
         perms = perms[: steps_per_epoch * batch_size]
@@ -463,6 +471,11 @@ def run_pretrain(cfg) -> Tuple[dict, TrainStateWithBatchStats]:
                 state, batch_images, step_rng, step
             )
 
+            epoch_metric_totals["loss"] = epoch_metric_totals.get("loss", 0.0) + float(loss)
+            for key, value in metrics.items():
+                epoch_metric_totals[key] = epoch_metric_totals.get(key, 0.0) + float(value)
+            epoch_metric_count += 1
+
             if global_step % log_every == 0:
                 log_payload = {"pretrain/loss": float(loss)}
                 log_payload.update(
@@ -476,6 +489,16 @@ def run_pretrain(cfg) -> Tuple[dict, TrainStateWithBatchStats]:
                 save_image_grid(grid, sample_path, nrow=2)
                 log_images(run, {"pretrain/recon": grid}, step=global_step)
             global_step += 1
+
+        if epoch_metric_count:
+            reconstruction_metric_logger.log(
+                epoch=epoch,
+                step=global_step,
+                metrics={
+                    key: value / epoch_metric_count
+                    for key, value in epoch_metric_totals.items()
+                },
+            )
 
     # Save Checkpoint
 

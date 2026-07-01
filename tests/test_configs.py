@@ -22,6 +22,8 @@ def test_train_config_composes_without_removed_knobs() -> None:
     cfg = _compose("train")
 
     assert cfg.model.autoencoder.name == "autoencoder"
+    assert cfg.gen_lr == 0.001
+    assert cfg.disc_lr == 0.001
     assert "finetune_ae" not in cfg
     assert "ae_lr" not in cfg
 
@@ -67,6 +69,8 @@ def test_project_qgan_configs_compose_directly() -> None:
     assert train_cfg.model.autoencoder.name == "autoencoder"
     assert train_cfg.model.quantum_generator.n_qubits == 10
     assert train_cfg.model.discriminator.channels == [32, 64]
+    assert train_cfg.gen_lr == 0.001
+    assert train_cfg.disc_lr == 0.001
     assert train_cfg.wandb_mode == "disabled"
 
 

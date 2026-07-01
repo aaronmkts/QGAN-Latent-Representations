@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from hydra import compose, initialize_config_dir
@@ -35,6 +36,13 @@ def test_pretrain_smoke_mode_runs(tmp_path, monkeypatch) -> None:
     run_pretrain(cfg)
 
     assert (tmp_path / "checkpoints" / "spatial_vqvae.ckpt").exists()
+    metrics_csv = tmp_path / "outputs" / "pretrain_smoke" / "reconstruction_metrics.csv"
+    metrics_json = tmp_path / "outputs" / "pretrain_smoke" / "reconstruction_metrics.json"
+    assert metrics_csv.exists()
+    assert metrics_json.exists()
+    records = json.loads(metrics_json.read_text(encoding="utf-8"))
+    assert len(records) == 1
+    assert "recon_loss" in records[0]
 
 
 def test_gan_smoke_mode_runs_without_pretrained_checkpoint(tmp_path, monkeypatch) -> None:
@@ -62,6 +70,14 @@ def test_gan_smoke_mode_runs_without_pretrained_checkpoint(tmp_path, monkeypatch
 
     assert (tmp_path / "checkpoints" / "qgan_gen.ckpt").exists()
     assert (tmp_path / "checkpoints" / "qgan_disc.ckpt").exists()
+    metrics_csv = tmp_path / "outputs" / "train_smoke" / "metrics.csv"
+    metrics_json = tmp_path / "outputs" / "train_smoke" / "metrics.json"
+    assert metrics_csv.exists()
+    assert metrics_json.exists()
+    records = json.loads(metrics_json.read_text(encoding="utf-8"))
+    assert len(records) == 1
+    assert records[0]["epoch"] == 0
+    assert (tmp_path / "outputs" / "train_smoke" / "samples_epoch_0001.png").exists()
 
 
 def test_mps_prior_smoke_mode_runs_without_pretrained_checkpoint(tmp_path, monkeypatch) -> None:

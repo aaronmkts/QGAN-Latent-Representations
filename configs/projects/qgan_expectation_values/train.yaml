@@ -11,10 +11,11 @@ seed: 42
 batch_size: 128
 epochs: 100
 n_critic: 5
-gen_lr: 1e-4
-disc_lr: 1e-4
+gen_lr: 1e-3
+disc_lr: 1e-3
 lambda_gp: 10.0
 sample_every: 200
+eval_epochs: 10
 log_every: 50
 smoke_test: false
 device: GPU

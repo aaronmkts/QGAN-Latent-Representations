@@ -188,3 +188,6 @@ checkpoints/
 data/mnist
 wandb
 lancedb/
+
+# Local Graphify knowledge graph artifacts
+graphify-out/
