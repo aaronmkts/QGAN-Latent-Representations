@@ -193,3 +193,7 @@ lancedb/
 graphify-out/
 
 .hermes/
+
+# Local runtime artifacts
+data/
+src/qgan_latent_representations.egg-info/
