@@ -191,3 +191,5 @@ lancedb/
 
 # Local Graphify knowledge graph artifacts
 graphify-out/
+
+.hermes/
